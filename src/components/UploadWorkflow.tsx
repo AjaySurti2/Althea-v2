@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { DocumentReview } from './DocumentReview';
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -12,6 +13,7 @@ interface UploadWorkflowProps {
 export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComplete, onCancel }) => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
+  const [showReview, setShowReview] = useState(false);
 
   const [files, setFiles] = useState<File[]>([]);
   const [tone, setTone] = useState<'friendly' | 'professional' | 'empathetic'>('friendly');
@@ -19,10 +21,19 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [processing, setProcessing] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [uploadComplete, setUploadComplete] = useState(false);
+  const MAX_FILES = 5;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      const selectedFiles = Array.from(e.target.files);
+      const remainingSlots = MAX_FILES - files.length;
+
+      if (selectedFiles.length > remainingSlots) {
+        alert(`You can only upload ${MAX_FILES} files per session. ${remainingSlots} slots remaining.`);
+        setFiles([...files, ...selectedFiles.slice(0, remainingSlots)]);
+      } else {
+        setFiles([...files, ...selectedFiles]);
+      }
     }
   };
 
@@ -30,10 +41,19 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setFiles(files.filter((_, i) => i !== index));
   };
 
-  const handleStep1Next = () => {
-    if (files.length > 0) {
-      setCurrentStep(2);
+  const handleStep1Next = async () => {
+    if (files.length === 0) {
+      alert('Please upload at least one file');
+      return;
     }
+
+    if (files.length > MAX_FILES) {
+      alert(`Maximum ${MAX_FILES} files allowed per session`);
+      return;
+    }
+
+    // Create session and upload files
+    await handleStep3Process();
   };
 
   const handleStep2Next = () => {
@@ -79,8 +99,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
       setTimeout(() => {
         setProcessing(false);
-        setCurrentStep(4);
-      }, 2000);
+        setShowReview(true);
+      }, 1000);
     } catch (error: any) {
       alert(`Upload failed: ${error.message}`);
       setProcessing(false);
@@ -103,7 +123,56 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setCurrentStep(1);
     setSessionId(null);
     setUploadComplete(false);
+    setShowReview(false);
   };
+
+  const handleReviewContinue = () => {
+    setShowReview(false);
+    setCurrentStep(2);
+  };
+
+  const handleReviewBack = () => {
+    setShowReview(false);
+    setCurrentStep(1);
+  };
+
+  // Show DocumentReview if we're in review mode
+  if (showReview && sessionId) {
+    return (
+      <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="min-h-screen px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Upload Health Report
+                </h1>
+                <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Review Documents
+                </p>
+              </div>
+              <button
+                onClick={onCancel}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <DocumentReview
+                sessionId={sessionId}
+                darkMode={darkMode}
+                onContinue={handleReviewContinue}
+                onBack={handleReviewBack}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const progressPercentage = (currentStep / 4) * 100;
 
@@ -233,7 +302,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 {files.length > 0 && (
                   <div className="space-y-2">
                     <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Selected Files ({files.length})
+                      Selected Files ({files.length}/{MAX_FILES})
                     </h3>
                     {files.map((file, index) => (
                       <div

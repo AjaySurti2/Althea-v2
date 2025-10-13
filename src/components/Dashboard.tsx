@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, FileText, TrendingUp, Users, Calendar, Download, Settings, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Session, HealthMetric, FamilyPattern, Reminder } from '../lib/supabase';
+import { TotalReports } from './TotalReports';
 
 interface DashboardProps {
   darkMode: boolean;
@@ -9,7 +10,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
   const { user, profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'patterns' | 'reminders'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'reports' | 'history' | 'patterns' | 'reminders'>('upload');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [metrics, setMetrics] = useState<HealthMetric[]>([]);
   const [patterns, setPatterns] = useState<FamilyPattern[]>([]);
@@ -44,6 +45,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
 
   const tabs = [
     { id: 'upload' as const, label: 'New Upload', icon: Upload },
+    { id: 'reports' as const, label: 'Total Reports', icon: FileText },
     { id: 'history' as const, label: 'Health History', icon: TrendingUp },
     { id: 'patterns' as const, label: 'Family Patterns', icon: Users },
     { id: 'reminders' as const, label: 'Reminders', icon: Calendar },
@@ -149,6 +151,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
 
           <div className="p-8">
             {activeTab === 'upload' && <UploadTab darkMode={darkMode} />}
+            {activeTab === 'reports' && <TotalReports darkMode={darkMode} />}
             {activeTab === 'history' && <HistoryTab darkMode={darkMode} sessions={sessions} metrics={metrics} />}
             {activeTab === 'patterns' && <PatternsTab darkMode={darkMode} patterns={patterns} />}
             {activeTab === 'reminders' && <RemindersTab darkMode={darkMode} reminders={reminders} onUpdate={loadDashboardData} />}
