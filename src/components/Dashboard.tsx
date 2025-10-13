@@ -321,10 +321,13 @@ const HistoryTab: React.FC<{ darkMode: boolean; sessions: Session[]; metrics: He
                   Session {new Date(session.created_at).toLocaleDateString()}
                 </span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  session.status === 'completed' ? 'bg-green-100 text-green-700' :
-                  session.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                  session.status === 'failed' ? 'bg-red-100 text-red-700' :
-                  'bg-gray-100 text-gray-700'
+                  session.status === 'completed'
+                    ? darkMode ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-800' : 'bg-emerald-100 text-emerald-800'
+                    : session.status === 'processing'
+                    ? darkMode ? 'bg-blue-950/50 text-blue-300 border border-blue-800' : 'bg-blue-100 text-blue-800'
+                    : session.status === 'failed'
+                    ? darkMode ? 'bg-red-950/50 text-red-300 border border-red-800' : 'bg-red-100 text-red-800'
+                    : darkMode ? 'bg-gray-800 text-gray-300 border border-gray-700' : 'bg-gray-100 text-gray-800'
                 }`}>
                   {session.status}
                 </span>
@@ -376,9 +379,11 @@ const PatternsTab: React.FC<{ darkMode: boolean; patterns: FamilyPattern[] }> = 
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  pattern.risk_level === 'high' ? 'bg-red-100 text-red-700' :
-                  pattern.risk_level === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-green-100 text-green-700'
+                  pattern.risk_level === 'high'
+                    ? darkMode ? 'bg-red-950/50 text-red-300 border border-red-800' : 'bg-red-100 text-red-800'
+                    : pattern.risk_level === 'moderate'
+                    ? darkMode ? 'bg-amber-950/50 text-amber-300 border border-amber-800' : 'bg-amber-100 text-amber-800'
+                    : darkMode ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-800' : 'bg-emerald-100 text-emerald-800'
                 }`}>
                   {pattern.risk_level} risk
                 </span>
