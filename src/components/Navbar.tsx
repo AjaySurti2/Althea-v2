@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Moon, Sun, Menu, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Moon, Sun, Menu, X, User, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { ProfileModal } from './ProfileModal';
 
 interface NavbarProps {
   darkMode: boolean;
@@ -10,8 +11,22 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuthClick, onLeadClick }) => {
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -59,14 +74,64 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
                 >
                   Dashboard
                 </button>
-                <button
-                  onClick={signOut}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Sign Out
-                </button>
+
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                      darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="font-medium">{profile?.full_name || 'User'}</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${profileDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {profileDropdownOpen && (
+                    <div className={`absolute right-0 mt-2 w-64 rounded-xl shadow-lg border overflow-hidden ${
+                      darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                    }`}>
+                      <div className={`p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                        <p className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {profile?.full_name || 'User'}
+                        </p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {user.email}
+                        </p>
+                      </div>
+
+                      <div className="p-2">
+                        <button
+                          onClick={() => {
+                            setProfileModalOpen(true);
+                            setProfileDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                            darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <User className="w-5 h-5" />
+                          <span>Edit Profile</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            signOut();
+                            setProfileDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                            darkMode ? 'hover:bg-red-900/20 text-red-400' : 'hover:bg-red-50 text-red-600'
+                          }`}
+                        >
+                          <LogOut className="w-5 h-5" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <>
@@ -114,6 +179,14 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
               </a>
               {user ? (
                 <>
+                  <div className={`px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                    <p className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {profile?.full_name || 'User'}
+                    </p>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {user.email}
+                    </p>
+                  </div>
                   <button
                     onClick={() => window.location.href = '#dashboard'}
                     className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-left"
@@ -121,12 +194,25 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
                     Dashboard
                   </button>
                   <button
-                    onClick={signOut}
-                    className={`px-4 py-2 rounded-lg text-left ${
+                    onClick={() => {
+                      setProfileModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-left flex items-center space-x-2 ${
                       darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'
                     }`}
                   >
-                    Sign Out
+                    <User className="w-5 h-5" />
+                    <span>Edit Profile</span>
+                  </button>
+                  <button
+                    onClick={signOut}
+                    className={`px-4 py-2 rounded-lg text-left flex items-center space-x-2 ${
+                      darkMode ? 'text-red-400 hover:bg-red-900/20' : 'text-red-600 hover:bg-red-50'
+                    }`}
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span>Sign Out</span>
                   </button>
                 </>
               ) : (
@@ -149,6 +235,12 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
           </div>
         )}
       </div>
+
+      <ProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        darkMode={darkMode}
+      />
     </nav>
   );
 };
