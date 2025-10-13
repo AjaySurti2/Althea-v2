@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Trash2, Eye, ArrowRight, ArrowLeft, AlertCircle, X } from 'lucide-react';
+import { FileText, Download, Trash2, Eye, ArrowRight, ArrowLeft, AlertCircle, X, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface DocumentReviewProps {
@@ -118,12 +118,21 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         }
 
         console.log('Signed URL obtained successfully');
-        setPreviewDocument({ ...doc, previewUrl: data.signedUrl });
+
+        // For PDFs, open in new tab due to iframe restrictions
+        if (doc.file_type === 'application/pdf') {
+          console.log('Opening PDF in new tab');
+          window.open(data.signedUrl, '_blank');
+          setLoadingPreview(false);
+        } else {
+          // For images, show in modal
+          setPreviewDocument({ ...doc, previewUrl: data.signedUrl });
+          setLoadingPreview(false);
+        }
       } catch (error: any) {
         console.error('Preview error:', error);
         alert(`Failed to load preview: ${error.message}`);
         setPreviewDocument(null);
-      } finally {
         setLoadingPreview(false);
       }
     } else {
@@ -358,16 +367,22 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                   }}
                 />
               ) : previewDocument.file_type === 'application/pdf' ? (
-                <iframe
-                  src={previewDocument.previewUrl}
-                  className="w-full h-[60vh] rounded-lg border-0"
-                  title={previewDocument.file_name}
-                  onLoad={() => console.log('PDF loaded successfully')}
-                  onError={(e) => {
-                    console.error('PDF load error:', e);
-                    alert('Failed to load PDF preview. The file may be corrupted or the URL expired.');
-                  }}
-                />
+                <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+                  <FileText className="w-16 h-16 text-green-500 mb-4" />
+                  <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    PDF Opens in New Tab
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    PDFs open in a new browser tab for better viewing experience
+                  </p>
+                  <button
+                    onClick={() => window.open(previewDocument.previewUrl, '_blank')}
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Open PDF</span>
+                  </button>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[60vh] text-center">
                   <FileText className="w-16 h-16 text-gray-400 mb-4" />
