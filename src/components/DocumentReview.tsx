@@ -97,24 +97,37 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   };
 
   const handlePreview = async (doc: any) => {
+    console.log('Preview requested for:', doc.file_name, 'Type:', doc.file_type);
+
     if (doc.file_type.startsWith('image/') || doc.file_type === 'application/pdf') {
       try {
         setLoadingPreview(true);
+        console.log('Fetching signed URL for:', doc.storage_path);
+
         const { data, error } = await supabase.storage
           .from('medical-files')
           .createSignedUrl(doc.storage_path, 3600);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase storage error:', error);
+          throw error;
+        }
 
+        if (!data?.signedUrl) {
+          throw new Error('No signed URL returned');
+        }
+
+        console.log('Signed URL obtained successfully');
         setPreviewDocument({ ...doc, previewUrl: data.signedUrl });
       } catch (error: any) {
         console.error('Preview error:', error);
         alert(`Failed to load preview: ${error.message}`);
+        setPreviewDocument(null);
       } finally {
         setLoadingPreview(false);
       }
     } else {
-      alert('Preview not available for this file type');
+      alert(`Preview not available for this file type: ${doc.file_type}`);
     }
   };
 
@@ -323,14 +336,25 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                 <div className="flex items-center justify-center h-[60vh]">
                   <div className="animate-spin w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full" />
                 </div>
+              ) : !previewDocument.previewUrl ? (
+                <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+                  <AlertCircle className="w-16 h-16 text-gray-400 mb-4" />
+                  <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Preview Not Available
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Unable to load preview for this file
+                  </p>
+                </div>
               ) : previewDocument.file_type.startsWith('image/') ? (
                 <img
                   src={previewDocument.previewUrl}
                   alt={previewDocument.file_name}
                   className="w-full h-auto rounded-lg"
+                  onLoad={() => console.log('Image loaded successfully')}
                   onError={(e) => {
-                    console.error('Image load error');
-                    alert('Failed to load image preview');
+                    console.error('Image load error:', e);
+                    alert('Failed to load image preview. The file may be corrupted or the URL expired.');
                   }}
                 />
               ) : previewDocument.file_type === 'application/pdf' ? (
@@ -338,12 +362,26 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                   src={previewDocument.previewUrl}
                   className="w-full h-[60vh] rounded-lg border-0"
                   title={previewDocument.file_name}
+                  onLoad={() => console.log('PDF loaded successfully')}
                   onError={(e) => {
-                    console.error('PDF load error');
-                    alert('Failed to load PDF preview');
+                    console.error('PDF load error:', e);
+                    alert('Failed to load PDF preview. The file may be corrupted or the URL expired.');
                   }}
                 />
-              ) : null}
+              ) : (
+                <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+                  <FileText className="w-16 h-16 text-gray-400 mb-4" />
+                  <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Preview Not Supported
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Preview is only available for images and PDF files
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                    File type: {previewDocument.file_type}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
