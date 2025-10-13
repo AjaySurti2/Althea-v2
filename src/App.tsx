@@ -10,6 +10,7 @@ import { Footer } from './components/Footer';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
 import { Dashboard } from './components/Dashboard';
+import { UploadWorkflow } from './components/UploadWorkflow';
 
 function AppContent() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ function AppContent() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'lead'>('signin');
   const [showDashboard, setShowDashboard] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [showWorkflow, setShowWorkflow] = useState(false);
 
   useEffect(() => {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -69,7 +71,7 @@ function AppContent() {
 
   const handleGetStarted = () => {
     if (user) {
-      window.location.hash = '#dashboard';
+      setShowWorkflow(true);
     } else {
       setAuthMode('signup');
       setAuthModalOpen(true);
@@ -80,6 +82,30 @@ function AppContent() {
     setAuthMode('signup');
     setAuthModalOpen(true);
   };
+
+  const handleStartWorkflow = () => {
+    if (user) {
+      setShowWorkflow(true);
+    } else {
+      handleAuthRequired();
+    }
+  };
+
+  const handleWorkflowComplete = () => {
+    setShowWorkflow(false);
+  };
+
+  if (showWorkflow && user) {
+    return (
+      <div className={darkMode ? 'dark' : ''}>
+        <UploadWorkflow
+          darkMode={darkMode}
+          onComplete={handleWorkflowComplete}
+          onCancel={handleWorkflowComplete}
+        />
+      </div>
+    );
+  }
 
   if (showDashboard && user) {
     return (
@@ -124,7 +150,7 @@ function AppContent() {
       <HowItWorks
         darkMode={darkMode}
         onAuthRequired={handleAuthRequired}
-        onNavigateToDashboard={handleGetStarted}
+        onStartWorkflow={handleStartWorkflow}
       />
 
       <Testimonials darkMode={darkMode} />

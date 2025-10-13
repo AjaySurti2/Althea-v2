@@ -21,7 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 interface HowItWorksProps {
   darkMode: boolean;
   onAuthRequired: () => void;
-  onNavigateToDashboard?: () => void;
+  onStartWorkflow?: () => void;
 }
 
 interface Step {
@@ -42,7 +42,7 @@ interface Step {
   };
 }
 
-export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired, onNavigateToDashboard }) => {
+export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired, onStartWorkflow }) => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -198,12 +198,9 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
     if (!user) {
       onAuthRequired();
     } else {
-      // User is logged in, navigate to dashboard
-      if (onNavigateToDashboard) {
-        onNavigateToDashboard();
-      } else {
-        // Fallback: use hash navigation
-        window.location.hash = '#dashboard';
+      // User is logged in, start the workflow
+      if (onStartWorkflow) {
+        onStartWorkflow();
       }
     }
   };
