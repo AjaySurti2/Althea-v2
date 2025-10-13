@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,11 +10,20 @@ interface ProfileModalProps {
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, darkMode }) => {
   const { user, profile, updateProfile } = useAuth();
-  const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [dateOfBirth, setDateOfBirth] = useState(profile?.date_of_birth || '');
+  const [fullName, setFullName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    if (isOpen && profile) {
+      setFullName(profile.full_name || '');
+      setDateOfBirth(profile.date_of_birth || '');
+      setError('');
+      setSuccess('');
+    }
+  }, [isOpen, profile]);
 
   if (!isOpen || !user) return null;
 
