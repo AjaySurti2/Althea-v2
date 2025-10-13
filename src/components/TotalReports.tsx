@@ -52,11 +52,11 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
       if (filesError) throw filesError;
 
-      // Group files by session and filter out soft-deleted
+      // Group files by session
       const processedSessions = sessionsData?.map(session => ({
         ...session,
         files: filesData?.filter((f: any) =>
-          f.session_id === session.id && !f.deleted_at
+          f.session_id === session.id
         ) || []
       })) || [];
 
@@ -92,23 +92,13 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         console.warn('Storage delete error:', storageError);
       }
 
-      // Try soft delete first (if column exists)
-      let dbError = null;
-      const softDeleteResult = await supabase
+      // Hard delete from database
+      const { error: deleteError } = await supabase
         .from('files')
-        .update({ deleted_at: new Date().toISOString() })
+        .delete()
         .eq('id', fileId);
 
-      if (softDeleteResult.error) {
-        // If soft delete fails (column doesn't exist), do hard delete
-        console.log('Soft delete not available, using hard delete');
-        const hardDeleteResult = await supabase
-          .from('files')
-          .delete()
-          .eq('id', fileId);
-
-        if (hardDeleteResult.error) throw hardDeleteResult.error;
-      }
+      if (deleteError) throw deleteError;
 
       // Reload sessions
       await loadSessions();
@@ -135,19 +125,14 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         }
       }
 
-      // Try to soft delete files first
-      const softDeleteResult = await supabase
+      // Hard delete files from database
+      const { error: filesError } = await supabase
         .from('files')
-        .update({ deleted_at: new Date().toISOString() })
+        .delete()
         .eq('session_id', sessionId);
 
-      // If soft delete doesn't work (column missing), hard delete files
-      if (softDeleteResult.error) {
-        console.log('Soft delete not available, using hard delete for files');
-        await supabase
-          .from('files')
-          .delete()
-          .eq('session_id', sessionId);
+      if (filesError) {
+        console.warn('Files delete warning:', filesError);
       }
 
       // Delete session
