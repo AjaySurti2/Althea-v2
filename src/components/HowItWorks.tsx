@@ -1,5 +1,22 @@
-import React from 'react';
-import { Upload, Settings, Sparkles, BarChart3, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Upload,
+  Settings,
+  Sparkles,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  FileText,
+  Image as ImageIcon,
+  File,
+  Clock,
+  TrendingUp,
+  Lock,
+  AlertCircle,
+  Sliders
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface HowItWorksProps {
@@ -7,137 +24,477 @@ interface HowItWorksProps {
   onAuthRequired: () => void;
 }
 
+interface Step {
+  id: number;
+  icon: React.ElementType;
+  title: string;
+  subtitle: string;
+  description: string;
+  actionLabel: string;
+  features: string[];
+  details: {
+    title: string;
+    items: string[];
+  };
+  techSpecs?: {
+    title: string;
+    items: string[];
+  };
+}
+
 export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired }) => {
   const { user } = useAuth();
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const steps = [
+  const steps: Step[] = [
     {
+      id: 1,
       icon: Upload,
-      title: 'Upload Your Reports',
-      description: 'Securely upload medical reports, lab results, or prescriptions in PDF, image, or text format. Multiple files supported.',
-      features: ['Multi-file upload', 'Auto text extraction', 'Preview & validate'],
+      title: 'Describe',
+      subtitle: 'Upload clinical documents',
+      description: 'Securely upload your medical documents. We support multiple formats and extract key information automatically.',
+      actionLabel: 'Choose Files',
+      features: ['PDF, JPG, PNG, DOCX, TXT', 'Multiple files per session', 'Drag & drop support'],
+      details: {
+        title: 'Data Preview & Validation',
+        items: [
+          'View extracted profile name and report date',
+          'Review key metrics and lab information',
+          'Confirm accuracy before AI processing',
+          'Supported: Lab results, prescriptions, doctor notes'
+        ]
+      },
+      techSpecs: {
+        title: 'File Requirements',
+        items: [
+          'Maximum file size: 10MB per document',
+          'Up to 5 files per session',
+          'Automatic OCR for image-based reports',
+          'HIPAA-compliant encrypted storage'
+        ]
+      }
     },
     {
-      icon: Settings,
-      title: 'Customize Your Experience',
-      description: 'Choose your preferred tone and language level for explanations that match your comfort level.',
-      features: ['Friendly/Professional/Empathetic', 'Simple to Technical', 'Family profiles'],
+      id: 2,
+      icon: Sliders,
+      title: 'Customize',
+      subtitle: 'Personalize your experience',
+      description: 'Choose how you want your health information explained. Select tone and language level that matches your preferences.',
+      actionLabel: 'Set Preferences',
+      features: ['Tone: Friendly | Professional | Empathetic', 'Language: Basic | Intermediate | Professional', 'Save preferences for future'],
+      details: {
+        title: 'Personalization Options',
+        items: [
+          'Friendly Tone: Warm, conversational, encouraging',
+          'Professional Tone: Clinical, detailed, precise',
+          'Empathetic Tone: Compassionate, supportive, reassuring',
+          'Basic Language: Simple terms, minimal jargon',
+          'Intermediate: Balanced medical terminology',
+          'Professional: Technical language, comprehensive'
+        ]
+      },
+      techSpecs: {
+        title: 'AI Customization',
+        items: [
+          'OpenAI GPT-4 powered interpretations',
+          'Dynamic prompt engineering per selection',
+          'Context-aware explanations',
+          'Preference memory for returning users'
+        ]
+      }
     },
     {
+      id: 3,
       icon: Sparkles,
-      title: 'Get AI Insights',
-      description: 'Our AI analyzes your reports and generates clear summaries, health metrics, and personalized doctor questions.',
-      features: ['Plain-language summaries', 'Key metrics extraction', 'Smart recommendations'],
+      title: 'Generate',
+      subtitle: 'AI interprets your data',
+      description: 'Our AI analyzes your documents and generates clear, personalized explanations in seconds with 90%+ accuracy.',
+      actionLabel: 'Start Processing',
+      features: ['Processing time: Under 5 seconds', 'Accuracy: 90%+ for standard labs', 'HIPAA compliant analysis'],
+      details: {
+        title: 'What You Get',
+        items: [
+          'Plain-language summary of findings',
+          'Key health metrics extracted and explained',
+          'Personalized questions for your doctor',
+          'Risk indicators and recommendations',
+          'Normal range comparisons',
+          'Trend analysis (if historical data available)'
+        ]
+      },
+      techSpecs: {
+        title: 'Processing Pipeline',
+        items: [
+          'OpenAI API with custom health prompts',
+          'Real-time processing status updates',
+          'Automatic quality validation checks',
+          'Error handling with fallback options'
+        ]
+      }
     },
     {
-      icon: BarChart3,
-      title: 'Track & Share',
-      description: 'View your health history, spot trends, detect family patterns, and download professional PDF reports.',
-      features: ['Historical tracking', 'Family patterns', 'PDF downloads'],
-    },
+      id: 4,
+      icon: Download,
+      title: 'Track & Download',
+      subtitle: 'Save and share results',
+      description: 'Download your personalized health report as a professional PDF. Track trends and share with caregivers securely.',
+      actionLabel: 'Download Report',
+      features: ['Branded PDF with logo', 'Health App integration', 'Caregiver sharing'],
+      details: {
+        title: 'Report Contents',
+        items: [
+          'Executive summary with key findings',
+          'Complete health metrics breakdown',
+          'Visual charts and trend graphs',
+          'Doctor discussion questions',
+          'Personalized health recommendations',
+          'Historical comparison (if available)'
+        ]
+      },
+      techSpecs: {
+        title: 'Export & Integration',
+        items: [
+          'PDF generation with custom branding',
+          'Apple Health and Google Fit integration',
+          'Secure sharing links with expiration',
+          'Email delivery with password protection'
+        ]
+      }
+    }
   ];
 
-  const handleStepClick = () => {
+  const handleNext = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleStepClick = (index: number) => {
+    setCurrentStep(index);
+  };
+
+  const handleActionClick = () => {
     if (!user) {
       onAuthRequired();
     }
   };
 
   return (
-    <section id="how-it-works" className={`py-20 px-4 sm:px-6 lg:px-8 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-b from-white to-green-50'}`}>
+    <section
+      id="how-it-works"
+      className={`py-20 px-4 sm:px-6 lg:px-8 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-b from-white via-green-50/30 to-white'}`}
+    >
       <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="text-center mb-16">
-          <h2 className={`text-4xl md:text-5xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className={`text-4xl md:text-5xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}
+          >
             How Althea Works
-          </h2>
-          <p className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'} max-w-3xl mx-auto mb-6`}>
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'} max-w-3xl mx-auto mb-6`}
+          >
             From upload to insights in four simple steps
-          </p>
+          </motion.p>
           {!user && (
-            <div className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg ${
-              darkMode ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
-            }`}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                darkMode ? 'bg-amber-900/30 text-amber-400 border border-amber-800' : 'bg-amber-50 text-amber-800 border border-amber-200'
+              }`}
+            >
               <Lock className="w-4 h-4" />
-              <span className="text-sm font-medium">Authentication required to access health features</span>
-            </div>
+              <span className="text-sm font-medium">Sign up to access full features</span>
+            </motion.div>
           )}
         </div>
 
-        <div className="space-y-12">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
-            const isEven = index % 2 === 0;
+        {/* Stepper Navigation */}
+        <div className="mb-12">
+          <div className="flex items-center justify-center">
+            <div className="flex items-center space-x-4 overflow-x-auto pb-4 max-w-4xl">
+              {steps.map((step, index) => {
+                const Icon = step.icon;
+                const isActive = index === currentStep;
+                const isCompleted = index < currentStep;
 
-            return (
-              <div
-                key={index}
-                className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} gap-8 items-center`}
-              >
-                <div className="flex-1">
-                  <div
-                    onClick={handleStepClick}
-                    className={`relative p-8 rounded-2xl transition-all duration-300 cursor-pointer ${
-                      darkMode
-                        ? 'bg-gray-800 hover:bg-gray-700'
-                        : 'bg-white hover:shadow-xl'
-                    } ${!user ? 'opacity-75' : ''} border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
-                  >
-                    {!user && (
-                      <div className="absolute inset-0 bg-gradient-to-br from-transparent to-green-500/5 rounded-2xl pointer-events-none" />
-                    )}
-
-                    <div className="flex items-start space-x-4 mb-6">
-                      <div className={`flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-2xl shadow-lg`}>
-                        {index + 1}
+                return (
+                  <React.Fragment key={step.id}>
+                    <motion.button
+                      onClick={() => handleStepClick(index)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex flex-col items-center space-y-2 min-w-[100px] transition-all duration-300 ${
+                        !user ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                      }`}
+                      disabled={!user}
+                    >
+                      <div
+                        className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+                          isActive
+                            ? 'bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg shadow-green-500/30'
+                            : isCompleted
+                            ? darkMode ? 'bg-green-600' : 'bg-green-500'
+                            : darkMode ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <Check className="w-8 h-8 text-white" />
+                        ) : (
+                          <Icon className={`w-8 h-8 ${isActive ? 'text-white' : darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                        )}
                       </div>
-                      <div className="flex-1">
-                        <h3 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <div className="text-center">
+                        <p className={`text-sm font-semibold ${
+                          isActive
+                            ? darkMode ? 'text-white' : 'text-gray-900'
+                            : darkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
                           {step.title}
-                        </h3>
-                        <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {step.description}
                         </p>
                       </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      {step.features.map((feature, idx) => (
-                        <span
-                          key={idx}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                            darkMode
-                              ? 'bg-gray-700 text-gray-300'
-                              : 'bg-green-50 text-green-700'
-                          }`}
-                        >
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-shrink-0">
-                  <div className={`w-48 h-48 rounded-3xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-2xl ${
-                    !user ? 'opacity-50' : ''
-                  }`}>
-                    <Icon className="w-24 h-24 text-white" />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    </motion.button>
+                    {index < steps.length - 1 && (
+                      <div className={`hidden md:block w-16 h-0.5 ${
+                        index < currentStep
+                          ? darkMode ? 'bg-green-600' : 'bg-green-500'
+                          : darkMode ? 'bg-gray-700' : 'bg-gray-300'
+                      } transition-colors duration-300`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
+        {/* Step Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+            className={`rounded-3xl p-8 md:p-12 ${
+              darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white shadow-xl'
+            }`}
+          >
+            {/* Step Header */}
+            <div className="flex items-start space-x-6 mb-8">
+              <div className="flex-shrink-0">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-lg">
+                  {React.createElement(steps[currentStep].icon, { className: "w-10 h-10 text-white" })}
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-2">
+                  <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                    darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                  }`}>
+                    Step {steps[currentStep].id}
+                  </span>
+                </div>
+                <h3 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {steps[currentStep].subtitle}
+                </h3>
+                <p className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {steps[currentStep].description}
+                </p>
+              </div>
+            </div>
+
+            {/* Key Features */}
+            <div className="mb-8">
+              <h4 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${
+                darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                Key Features
+              </h4>
+              <div className="flex flex-wrap gap-3">
+                {steps[currentStep].features.map((feature, idx) => (
+                  <motion.span
+                    key={idx}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: idx * 0.1 }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 ${
+                      darkMode
+                        ? 'bg-gray-700 text-gray-300 border border-gray-600'
+                        : 'bg-green-50 text-green-700 border border-green-200'
+                    }`}
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{feature}</span>
+                  </motion.span>
+                ))}
+              </div>
+            </div>
+
+            {/* Detailed Information */}
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
+              {/* Details Section */}
+              <div className={`p-6 rounded-xl ${
+                darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+              }`}>
+                <h4 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {steps[currentStep].details.title}
+                </h4>
+                <ul className="space-y-3">
+                  {steps[currentStep].details.items.map((item, idx) => (
+                    <motion.li
+                      key={idx}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`flex items-start space-x-3 text-sm ${
+                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}
+                    >
+                      <Check className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
+                        darkMode ? 'text-green-400' : 'text-green-600'
+                      }`} />
+                      <span>{item}</span>
+                    </motion.li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Tech Specs Section */}
+              {steps[currentStep].techSpecs && (
+                <div className={`p-6 rounded-xl border-2 border-dashed ${
+                  darkMode ? 'bg-gray-700/30 border-gray-600' : 'bg-emerald-50/50 border-emerald-200'
+                }`}>
+                  <h4 className={`text-lg font-semibold mb-4 flex items-center space-x-2 ${
+                    darkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    <AlertCircle className="w-5 h-5 text-emerald-500" />
+                    <span>{steps[currentStep].techSpecs.title}</span>
+                  </h4>
+                  <ul className="space-y-3">
+                    {steps[currentStep].techSpecs.items.map((item, idx) => (
+                      <motion.li
+                        key={idx}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className={`flex items-start space-x-3 text-sm ${
+                          darkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 mt-2" />
+                        <span>{item}</span>
+                      </motion.li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Action Button */}
+            <div className="flex items-center justify-center">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleActionClick}
+                className={`px-8 py-4 rounded-xl font-semibold transition-all duration-300 ${
+                  user
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40'
+                    : darkMode
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {user ? steps[currentStep].actionLabel : 'Sign Up to Continue'}
+              </motion.button>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Navigation Controls */}
+        <div className="flex items-center justify-between mt-8">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handlePrevious}
+            disabled={currentStep === 0}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all ${
+              currentStep === 0
+                ? darkMode ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : darkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-white text-gray-900 hover:shadow-lg border border-gray-200'
+            }`}
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span>Previous</span>
+          </motion.button>
+
+          {/* Progress Dots */}
+          <div className="flex space-x-2">
+            {steps.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => handleStepClick(index)}
+                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                  index === currentStep
+                    ? 'w-8 bg-gradient-to-r from-green-400 to-emerald-500'
+                    : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-300 hover:bg-gray-400'
+                }`}
+                disabled={!user}
+              />
+            ))}
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleNext}
+            disabled={currentStep === steps.length - 1}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all ${
+              currentStep === steps.length - 1
+                ? darkMode ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-green-500/30'
+            }`}
+          >
+            <span>Next</span>
+            <ChevronRight className="w-5 h-5" />
+          </motion.button>
+        </div>
+
+        {/* Call to Action */}
         {!user && (
-          <div className="mt-12 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-12 text-center"
+          >
+            <p className={`text-lg mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Ready to understand your health data?
+            </p>
             <button
               onClick={onAuthRequired}
-              className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-green-500/30 transition-all duration-300"
+              className="px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-lg hover:shadow-xl hover:shadow-green-500/40 transition-all duration-300"
             >
-              Sign Up to Get Started
+              Get Started Free
             </button>
-          </div>
+          </motion.div>
         )}
       </div>
     </section>
