@@ -13,9 +13,9 @@ export const Hero: React.FC<HeroProps> = ({ darkMode, onGetStarted, onEarlyAcces
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 rounded-full">
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-800 border-2 border-green-500 rounded-full shadow-sm">
               <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-300">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
                 AI-Powered Health Intelligence
               </span>
             </div>
