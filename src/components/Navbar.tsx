@@ -1,20 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Moon, Sun, Menu, X, User, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { ProfileModal } from './ProfileModal';
 
 interface NavbarProps {
   darkMode: boolean;
   toggleDarkMode: () => void;
   onAuthClick: (mode: 'signin' | 'signup') => void;
   onLeadClick: () => void;
+  onProfileClick?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuthClick, onLeadClick }) => {
+export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuthClick, onLeadClick, onProfileClick }) => {
   const { user, profile, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -105,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
                       <div className="p-2">
                         <button
                           onClick={() => {
-                            setProfileModalOpen(true);
+                            onProfileClick?.();
                             setProfileDropdownOpen(false);
                           }}
                           className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
@@ -195,7 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
                   </button>
                   <button
                     onClick={() => {
-                      setProfileModalOpen(true);
+                      onProfileClick?.();
                       setMobileMenuOpen(false);
                     }}
                     className={`px-4 py-2 rounded-lg text-left flex items-center space-x-2 ${
@@ -235,12 +234,6 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
           </div>
         )}
       </div>
-
-      <ProfileModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        darkMode={darkMode}
-      />
     </nav>
   );
 };

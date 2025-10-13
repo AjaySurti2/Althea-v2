@@ -8,6 +8,7 @@ import { Testimonials } from './components/Testimonials';
 import { FAQ } from './components/FAQ';
 import { Footer } from './components/Footer';
 import { AuthModal } from './components/AuthModal';
+import { ProfileModal } from './components/ProfileModal';
 import { Dashboard } from './components/Dashboard';
 
 function AppContent() {
@@ -16,6 +17,7 @@ function AppContent() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'lead'>('signin');
   const [showDashboard, setShowDashboard] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   useEffect(() => {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -87,9 +89,16 @@ function AppContent() {
           toggleDarkMode={toggleDarkMode}
           onAuthClick={handleAuthClick}
           onLeadClick={handleLeadClick}
+          onProfileClick={() => setProfileModalOpen(true)}
         />
         <Dashboard darkMode={darkMode} />
         <Footer darkMode={darkMode} />
+
+        <ProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          darkMode={darkMode}
+        />
       </div>
     );
   }
@@ -101,6 +110,7 @@ function AppContent() {
         toggleDarkMode={toggleDarkMode}
         onAuthClick={handleAuthClick}
         onLeadClick={handleLeadClick}
+        onProfileClick={() => setProfileModalOpen(true)}
       />
 
       <Hero
@@ -126,6 +136,12 @@ function AppContent() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         mode={authMode}
+        darkMode={darkMode}
+      />
+
+      <ProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
         darkMode={darkMode}
       />
     </div>
