@@ -19,6 +19,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<any | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     loadDocuments();
@@ -37,9 +38,8 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         throw error;
       }
 
-      // Filter out soft-deleted files (if column exists)
-      const activeDocuments = data?.filter((doc: any) => !doc.deleted_at) || [];
-      setDocuments(activeDocuments);
+      // Set documents
+      setDocuments(data || []);
     } catch (error: any) {
       console.error('Error loading documents:', error);
       alert(`Failed to load documents: ${error.message}`);
@@ -62,22 +62,13 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         console.warn('Storage delete warning:', storageError);
       }
 
-      // Try soft delete first (if column exists)
-      const softDeleteResult = await supabase
+      // Hard delete from database
+      const { error: deleteError } = await supabase
         .from('files')
-        .update({ deleted_at: new Date().toISOString() })
+        .delete()
         .eq('id', fileId);
 
-      if (softDeleteResult.error) {
-        // If soft delete fails (column doesn't exist), do hard delete
-        console.log('Soft delete not available, using hard delete');
-        const hardDeleteResult = await supabase
-          .from('files')
-          .delete()
-          .eq('id', fileId);
-
-        if (hardDeleteResult.error) throw hardDeleteResult.error;
-      }
+      if (deleteError) throw deleteError;
 
       // Reload documents
       await loadDocuments();
@@ -108,6 +99,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
   const handlePreview = async (doc: any) => {
     if (doc.file_type.startsWith('image/') || doc.file_type === 'application/pdf') {
       try {
+        setLoadingPreview(true);
         const { data, error } = await supabase.storage
           .from('medical-files')
           .createSignedUrl(doc.storage_path, 3600);
@@ -116,7 +108,10 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
 
         setPreviewDocument({ ...doc, previewUrl: data.signedUrl });
       } catch (error: any) {
+        console.error('Preview error:', error);
         alert(`Failed to load preview: ${error.message}`);
+      } finally {
+        setLoadingPreview(false);
       }
     } else {
       alert('Preview not available for this file type');
@@ -323,18 +318,30 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 max-h-[70vh] overflow-auto">
-              {previewDocument.file_type.startsWith('image/') ? (
+            <div className="p-4 max-h-[70vh] overflow-auto bg-gray-50 dark:bg-gray-900">
+              {loadingPreview ? (
+                <div className="flex items-center justify-center h-[60vh]">
+                  <div className="animate-spin w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full" />
+                </div>
+              ) : previewDocument.file_type.startsWith('image/') ? (
                 <img
                   src={previewDocument.previewUrl}
                   alt={previewDocument.file_name}
-                  className="w-full h-auto"
+                  className="w-full h-auto rounded-lg"
+                  onError={(e) => {
+                    console.error('Image load error');
+                    alert('Failed to load image preview');
+                  }}
                 />
               ) : previewDocument.file_type === 'application/pdf' ? (
                 <iframe
                   src={previewDocument.previewUrl}
-                  className="w-full h-[60vh]"
+                  className="w-full h-[60vh] rounded-lg border-0"
                   title={previewDocument.file_name}
+                  onError={(e) => {
+                    console.error('PDF load error');
+                    alert('Failed to load PDF preview');
+                  }}
                 />
               ) : null}
             </div>
