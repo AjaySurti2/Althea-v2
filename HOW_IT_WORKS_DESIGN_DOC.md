@@ -84,18 +84,18 @@ This document outlines the complete redesign of the "How It Works" module for Al
 **Core Technologies:**
 - **React 18.3.1**: Component framework
 - **TypeScript 5.5.3**: Type safety
-- **Framer Motion 11.x**: Animation library
-- **Tailwind CSS 3.4.1**: Styling framework
+- **Tailwind CSS 3.4.1**: Styling framework with built-in transitions
 - **Lucide React**: Icon library
 
-**Animation Library Choice: Framer Motion**
+**Animation Approach: CSS Transitions**
 
 Selected for:
-- Declarative animation syntax
-- Built-in gesture support
-- Layout animations
-- Exit animations with AnimatePresence
-- Performance optimization
+- Zero additional dependencies
+- Excellent performance
+- Browser-native implementation
+- Smaller bundle size (365KB vs 483KB with animation library)
+- Simpler maintenance
+- No server-side compatibility issues
 
 ### Component Architecture
 
