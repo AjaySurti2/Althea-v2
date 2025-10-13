@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X } from 'lucide-react';
+import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DocumentReview } from './DocumentReview';
+import { DataPreview } from './DataPreview';
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -14,6 +15,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [showReview, setShowReview] = useState(false);
+  const [showDataPreview, setShowDataPreview] = useState(false);
 
   const [files, setFiles] = useState<File[]>([]);
   const [tone, setTone] = useState<'friendly' | 'professional' | 'empathetic'>('friendly');
@@ -52,15 +54,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       return;
     }
 
-    // Create session and upload files
-    await handleStep3Process();
+    await handleUploadFiles();
   };
 
-  const handleStep2Next = () => {
-    setCurrentStep(3);
-  };
-
-  const handleStep3Process = async () => {
+  const handleUploadFiles = async () => {
     if (!user || files.length === 0) return;
 
     setProcessing(true);
@@ -113,6 +110,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     }
   };
 
+  const handleStep3Process = async () => {
+    setProcessing(true);
+    setTimeout(() => {
+      setProcessing(false);
+      setCurrentStep(5);
+    }, 2000);
+  };
+
   const handleDownloadReport = () => {
     setUploadComplete(true);
   };
@@ -130,6 +135,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setSessionId(null);
     setUploadComplete(false);
     setShowReview(false);
+    setShowDataPreview(false);
   };
 
   const handleReviewContinue = () => {
@@ -142,7 +148,57 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setCurrentStep(1);
   };
 
-  // Show DocumentReview if we're in review mode
+  const handleCustomizeContinue = () => {
+    setShowDataPreview(true);
+  };
+
+  const handleDataPreviewBack = () => {
+    setShowDataPreview(false);
+  };
+
+  const handleDataPreviewApprove = () => {
+    setShowDataPreview(false);
+    setCurrentStep(4);
+  };
+
+  if (showDataPreview && sessionId) {
+    return (
+      <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="min-h-screen px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Upload Health Report
+                </h1>
+                <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Data Preview & Verification
+                </p>
+              </div>
+              <button
+                onClick={onCancel}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <DataPreview
+                sessionId={sessionId}
+                darkMode={darkMode}
+                customization={{ tone, language: languageLevel }}
+                onBack={handleDataPreviewBack}
+                onApprove={handleDataPreviewApprove}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (showReview && sessionId) {
     return (
       <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
@@ -180,27 +236,27 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     );
   }
 
-  const progressPercentage = (currentStep / 4) * 100;
+  const progressPercentage = (currentStep / 5) * 100;
 
   const steps = [
     { number: 1, icon: Upload, label: 'Upload' },
     { number: 2, icon: Sliders, label: 'Customize' },
-    { number: 3, icon: Sparkles, label: 'Process' },
-    { number: 4, icon: Download, label: 'Download' },
+    { number: 3, icon: Eye, label: 'Preview' },
+    { number: 4, icon: Sparkles, label: 'Process' },
+    { number: 5, icon: Download, label: 'Download' },
   ];
 
   return (
     <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <div className="min-h-screen px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Upload Health Report
               </h1>
               <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Step {currentStep} of 4
+                Step {currentStep} of 5
               </p>
             </div>
             <button
@@ -213,7 +269,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             </button>
           </div>
 
-          {/* Progress Bar */}
           <div className="mb-8">
             <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
               <div
@@ -222,7 +277,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               />
             </div>
 
-            {/* Step Indicators */}
             <div className="flex justify-between mt-4">
               {steps.map((step) => {
                 const StepIcon = step.icon;
@@ -263,7 +317,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             </div>
           </div>
 
-          {/* Step Content */}
           <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             {currentStep === 1 && (
               <div className="space-y-6">
@@ -342,10 +395,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 <div className="flex justify-end">
                   <button
                     onClick={handleStep1Next}
-                    disabled={files.length === 0}
+                    disabled={files.length === 0 || processing}
                     className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    <span>Next: Customize</span>
+                    <span>{processing ? 'Uploading...' : 'Next: Review'}</span>
                     <ArrowRight className="w-5 h-5" />
                   </button>
                 </div>
@@ -431,7 +484,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
                 <div className="flex justify-between">
                   <button
-                    onClick={() => setCurrentStep(1)}
+                    onClick={() => setShowReview(true)}
                     className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                       darkMode
                         ? 'bg-gray-700 text-white hover:bg-gray-600'
@@ -442,24 +495,24 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     <span>Back</span>
                   </button>
                   <button
-                    onClick={handleStep2Next}
+                    onClick={handleCustomizeContinue}
                     className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                   >
-                    <span>Next: Process</span>
+                    <span>Next: Preview Data</span>
                     <ArrowRight className="w-5 h-5" />
                   </button>
                 </div>
               </div>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <div className="space-y-6">
                 <div>
                   <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     Ready to Process
                   </h2>
                   <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                    Review your selections and start AI analysis.
+                    Review your selections and start final processing.
                   </p>
                 </div>
 
@@ -467,10 +520,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div className="space-y-4">
                     <div>
                       <h3 className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Files to Process
+                        Files Processed
                       </h3>
                       <p className={darkMode ? 'text-white' : 'text-gray-900'}>
-                        {files.length} file{files.length !== 1 ? 's' : ''} selected
+                        {files.length} file{files.length !== 1 ? 's' : ''} analyzed
                       </p>
                     </div>
                     <div>
@@ -492,7 +545,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div className="text-center py-8">
                     <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      Processing your files...
+                      Generating your report...
                     </p>
                     <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       This usually takes less than 5 seconds
@@ -503,7 +556,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 {!processing && (
                   <div className="flex justify-between">
                     <button
-                      onClick={() => setCurrentStep(2)}
+                      onClick={() => setShowDataPreview(true)}
                       className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                         darkMode
                           ? 'bg-gray-700 text-white hover:bg-gray-600'
@@ -518,14 +571,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                       className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                     >
                       <Sparkles className="w-5 h-5" />
-                      <span>Start Processing</span>
+                      <span>Generate Report</span>
                     </button>
                   </div>
                 )}
               </div>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <div className="space-y-6">
                 <div className="text-center py-8">
                   <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
