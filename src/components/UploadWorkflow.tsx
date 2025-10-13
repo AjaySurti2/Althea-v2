@@ -79,7 +79,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       if (sessionError) throw sessionError;
       setSessionId(session.id);
 
-      for (const file of files) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         const filePath = `${user.id}/${session.id}/${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from('medical-files')
@@ -87,14 +88,17 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
         if (uploadError) throw uploadError;
 
-        await supabase.from('files').insert({
+        const { error: insertError } = await supabase.from('files').insert({
           session_id: session.id,
           user_id: user.id,
           storage_path: filePath,
           file_name: file.name,
           file_type: file.type,
           file_size: file.size,
+          display_order: i,
         });
+
+        if (insertError) throw insertError;
       }
 
       setTimeout(() => {

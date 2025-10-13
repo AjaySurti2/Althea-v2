@@ -34,26 +34,36 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
     if (!user) return;
 
     try {
-      const { data: sessionsData, error } = await supabase
+      // Load sessions
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from('sessions')
-        .select(`
-          *,
-          files(*)
-        `)
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (sessionsError) throw sessionsError;
 
-      // Filter out soft-deleted files
+      // Load all files for this user
+      const { data: filesData, error: filesError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (filesError) throw filesError;
+
+      // Group files by session and filter out soft-deleted
       const processedSessions = sessionsData?.map(session => ({
         ...session,
-        files: session.files.filter((f: any) => !f.deleted_at)
+        files: filesData?.filter((f: any) =>
+          f.session_id === session.id && !f.deleted_at
+        ) || []
       })) || [];
 
       setSessions(processedSessions);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading sessions:', error);
+      alert(`Failed to load sessions: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -73,23 +83,38 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
   const handleDeleteFile = async (fileId: string, storagePath: string) => {
     try {
-      // Soft delete in database
-      const { error: dbError } = await supabase
+      // Delete from storage first
+      const { error: storageError } = await supabase.storage
+        .from('medical-files')
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.warn('Storage delete error:', storageError);
+      }
+
+      // Try soft delete first (if column exists)
+      let dbError = null;
+      const softDeleteResult = await supabase
         .from('files')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', fileId);
 
-      if (dbError) throw dbError;
+      if (softDeleteResult.error) {
+        // If soft delete fails (column doesn't exist), do hard delete
+        console.log('Soft delete not available, using hard delete');
+        const hardDeleteResult = await supabase
+          .from('files')
+          .delete()
+          .eq('id', fileId);
 
-      // Delete from storage
-      await supabase.storage
-        .from('medical-files')
-        .remove([storagePath]);
+        if (hardDeleteResult.error) throw hardDeleteResult.error;
+      }
 
       // Reload sessions
       await loadSessions();
       setDeleteConfirm(null);
     } catch (error: any) {
+      console.error('Delete file error:', error);
       alert(`Failed to delete file: ${error.message}`);
     }
   };
@@ -99,29 +124,45 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       const session = sessions.find(s => s.id === sessionId);
       if (!session) return;
 
-      // Delete all files in the session
+      // Delete all files from storage
       for (const file of session.files) {
-        await supabase.storage
+        const { error } = await supabase.storage
           .from('medical-files')
           .remove([file.storage_path]);
+
+        if (error) {
+          console.warn('Storage delete warning:', error);
+        }
       }
 
-      // Soft delete all file records
-      await supabase
+      // Try to soft delete files first
+      const softDeleteResult = await supabase
         .from('files')
         .update({ deleted_at: new Date().toISOString() })
         .eq('session_id', sessionId);
 
+      // If soft delete doesn't work (column missing), hard delete files
+      if (softDeleteResult.error) {
+        console.log('Soft delete not available, using hard delete for files');
+        await supabase
+          .from('files')
+          .delete()
+          .eq('session_id', sessionId);
+      }
+
       // Delete session
-      await supabase
+      const { error: sessionError } = await supabase
         .from('sessions')
         .delete()
         .eq('id', sessionId);
+
+      if (sessionError) throw sessionError;
 
       // Reload sessions
       await loadSessions();
       setDeleteConfirm(null);
     } catch (error: any) {
+      console.error('Delete session error:', error);
       alert(`Failed to delete session: ${error.message}`);
     }
   };

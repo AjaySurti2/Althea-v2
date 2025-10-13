@@ -30,13 +30,19 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         .from('files')
         .select('*')
         .eq('session_id', sessionId)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true });
+        .order('created_at', { ascending: true });
 
-      if (error) throw error;
-      setDocuments(data || []);
-    } catch (error) {
+      if (error) {
+        console.error('Supabase error loading documents:', error);
+        throw error;
+      }
+
+      // Filter out soft-deleted files (if column exists)
+      const activeDocuments = data?.filter((doc: any) => !doc.deleted_at) || [];
+      setDocuments(activeDocuments);
+    } catch (error: any) {
       console.error('Error loading documents:', error);
+      alert(`Failed to load documents: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -47,24 +53,38 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
       const doc = documents.find(d => d.id === fileId);
       if (!doc) return;
 
-      // Soft delete: set deleted_at timestamp
-      const { error } = await supabase
+      // Remove from Supabase Storage
+      const { error: storageError } = await supabase.storage
+        .from('medical-files')
+        .remove([doc.storage_path]);
+
+      if (storageError) {
+        console.warn('Storage delete warning:', storageError);
+      }
+
+      // Try soft delete first (if column exists)
+      const softDeleteResult = await supabase
         .from('files')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', fileId);
 
-      if (error) throw error;
+      if (softDeleteResult.error) {
+        // If soft delete fails (column doesn't exist), do hard delete
+        console.log('Soft delete not available, using hard delete');
+        const hardDeleteResult = await supabase
+          .from('files')
+          .delete()
+          .eq('id', fileId);
 
-      // Remove from Supabase Storage
-      await supabase.storage
-        .from('medical-files')
-        .remove([doc.storage_path]);
+        if (hardDeleteResult.error) throw hardDeleteResult.error;
+      }
 
       // Reload documents
       await loadDocuments();
       setDeleteConfirm(null);
 
     } catch (error: any) {
+      console.error('Delete error:', error);
       alert(`Failed to delete document: ${error.message}`);
     }
   };
