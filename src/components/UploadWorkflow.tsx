@@ -95,10 +95,12 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           file_name: file.name,
           file_type: file.type,
           file_size: file.size,
-          display_order: i,
         });
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('File insert error:', insertError);
+          throw insertError;
+        }
       }
 
       setTimeout(() => {
