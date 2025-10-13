@@ -21,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 interface HowItWorksProps {
   darkMode: boolean;
   onAuthRequired: () => void;
+  onNavigateToDashboard?: () => void;
 }
 
 interface Step {
@@ -41,7 +42,7 @@ interface Step {
   };
 }
 
-export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired }) => {
+export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired, onNavigateToDashboard }) => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -196,6 +197,14 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
   const handleActionClick = () => {
     if (!user) {
       onAuthRequired();
+    } else {
+      // User is logged in, navigate to dashboard
+      if (onNavigateToDashboard) {
+        onNavigateToDashboard();
+      } else {
+        // Fallback: use hash navigation
+        window.location.hash = '#dashboard';
+      }
     }
   };
 
@@ -242,10 +251,7 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
                   <React.Fragment key={step.id}>
                     <button
                       onClick={() => handleStepClick(index)}
-                      className={`flex flex-col items-center space-y-2 min-w-[100px] transition-all duration-300 transform hover:scale-105 ${
-                        !user ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-                      }`}
-                      disabled={!user}
+                      className="flex flex-col items-center space-y-2 min-w-[100px] transition-all duration-300 transform hover:scale-105 cursor-pointer"
                     >
                       <div
                         className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
@@ -403,10 +409,8 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
               onClick={handleActionClick}
               className={`px-8 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
                 user
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40'
-                  : darkMode
-                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 cursor-pointer'
+                  : 'bg-gradient-to-r from-green-500/70 to-emerald-600/70 text-white shadow-lg cursor-pointer hover:from-green-500 hover:to-emerald-600'
               }`}
             >
               {user ? steps[currentStep].actionLabel : 'Sign Up to Continue'}
@@ -440,7 +444,6 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
                     ? 'w-8 bg-gradient-to-r from-green-400 to-emerald-500'
                     : darkMode ? 'w-2.5 bg-gray-700 hover:bg-gray-600' : 'w-2.5 bg-gray-300 hover:bg-gray-400'
                 }`}
-                disabled={!user}
               />
             ))}
           </div>

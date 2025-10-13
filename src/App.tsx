@@ -124,6 +124,7 @@ function AppContent() {
       <HowItWorks
         darkMode={darkMode}
         onAuthRequired={handleAuthRequired}
+        onNavigateToDashboard={handleGetStarted}
       />
 
       <Testimonials darkMode={darkMode} />
