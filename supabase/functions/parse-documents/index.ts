@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,99 +56,101 @@ Return your analysis as a valid JSON object with the following exact structure:
 
 **CRITICAL:** Return ONLY the JSON object, no additional text or explanation.`;
 
-async function extractTextFromFile(fileContent: ArrayBuffer, fileType: string): Promise<string> {
-  if (fileType === 'text/plain') {
+async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const pdfLib = await import("npm:pdf-parse@1.1.1");
+    const data = await pdfLib.default(Buffer.from(arrayBuffer));
+    return data.text || "";
+  } catch (error) {
+    console.error("PDF extraction error:", error);
+    throw new Error("Failed to extract text from PDF");
+  }
+}
+
+async function extractTextFromImage(arrayBuffer: ArrayBuffer): Promise<string> {
+  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+
+  if (!anthropicApiKey) {
+    throw new Error("ANTHROPIC_API_KEY required for image OCR");
+  }
+
+  try {
+    const base64Image = btoa(
+      String.fromCharCode(...new Uint8Array(arrayBuffer))
+    );
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicApiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/jpeg",
+                  data: base64Image,
+                },
+              },
+              {
+                type: "text",
+                text: "Please extract ALL text from this medical report image. Return only the raw text content, preserving the layout and structure as much as possible. Include all patient information, test results, values, and interpretations exactly as they appear.",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Anthropic Vision API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.content[0].text || "";
+  } catch (error) {
+    console.error("Image OCR error:", error);
+    throw new Error("Failed to extract text from image");
+  }
+}
+
+async function extractTextFromFile(
+  fileContent: ArrayBuffer,
+  fileType: string,
+  fileName: string
+): Promise<string> {
+  console.log(`Extracting text from ${fileName} (${fileType})`);
+
+  if (fileType === "application/pdf") {
+    return await extractTextFromPDF(fileContent);
+  }
+
+  if (fileType.startsWith("image/")) {
+    return await extractTextFromImage(fileContent);
+  }
+
+  if (fileType === "text/plain") {
     const decoder = new TextDecoder();
     return decoder.decode(fileContent);
   }
 
-  return `[Document text extraction - simulated for ${fileType} file]
-MEDICAL REPORT
-
-Patient Name: John Doe
-Patient ID: PT-2024-12345
-Date of Birth: 01/15/1978
-Gender: Male
-
-Report Date: October 14, 2025
-Lab Name: Central Medical Laboratory
-Ordering Physician: Dr. Sarah Johnson, MD
-
-LIPID PROFILE TEST RESULTS
-
-Test Name                Value      Unit      Reference Range      Status
-------------------------------------------------------------------------
-Total Cholesterol        210        mg/dL     <200                 High
-LDL Cholesterol         135        mg/dL     <100                 High
-HDL Cholesterol         45         mg/dL     >40                  Normal
-Triglycerides           160        mg/dL     <150                 High
-VLDL Cholesterol        30         mg/dL     <30                  Borderline
-
-CLINICAL INTERPRETATION:
-The lipid profile shows elevated total cholesterol, LDL cholesterol, and triglycerides.
-HDL cholesterol is within normal range. These findings suggest dyslipidemia requiring
-lifestyle modifications and potential pharmacological intervention.
-
-RECOMMENDATIONS:
-1. Dietary modifications to reduce saturated fat intake
-2. Regular physical activity (150 minutes per week)
-3. Follow-up lipid profile in 3 months
-4. Consider statin therapy if levels remain elevated
-
-Dr. Sarah Johnson, MD
-Central Medical Laboratory
-Certified Clinical Pathologist`;
+  throw new Error(`Unsupported file type: ${fileType}`);
 }
 
 async function parseWithAI(documentText: string, customization: any): Promise<any> {
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
 
   if (!anthropicApiKey) {
-    console.log("ANTHROPIC_API_KEY not found, using mock parsing");
-    return {
-      profile_name: "John Doe",
-      report_date: "October 14, 2025",
-      lab_name: "Central Medical Laboratory",
-      doctor_name: "Dr. Sarah Johnson, MD",
-      key_metrics: [
-        {
-          test_name: "Total Cholesterol",
-          value: "210",
-          unit: "mg/dL",
-          reference_range: "<200",
-          interpretation: "High"
-        },
-        {
-          test_name: "LDL Cholesterol",
-          value: "135",
-          unit: "mg/dL",
-          reference_range: "<100",
-          interpretation: "High"
-        },
-        {
-          test_name: "HDL Cholesterol",
-          value: "45",
-          unit: "mg/dL",
-          reference_range: ">40",
-          interpretation: "Normal"
-        },
-        {
-          test_name: "Triglycerides",
-          value: "160",
-          unit: "mg/dL",
-          reference_range: "<150",
-          interpretation: "High"
-        },
-        {
-          test_name: "VLDL Cholesterol",
-          value: "30",
-          unit: "mg/dL",
-          reference_range: "<30",
-          interpretation: "Borderline"
-        }
-      ],
-      summary: "The lipid profile shows elevated total cholesterol, LDL cholesterol, and triglycerides, indicating dyslipidemia. Lifestyle modifications and potential medication are recommended, with follow-up testing in 3 months."
-    };
+    throw new Error("ANTHROPIC_API_KEY is required for AI parsing");
   }
 
   try {
@@ -213,82 +216,130 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const parsedDocuments = [];
 
     for (const fileId of fileIds) {
-      const fileResponse = await fetch(
-        `${supabaseUrl}/rest/v1/files?id=eq.${fileId}&select=*`,
-        {
-          headers: {
-            "apikey": supabaseServiceKey,
-            "Authorization": `Bearer ${supabaseServiceKey}`,
-          },
+      try {
+        const { data: fileData, error: fileError } = await supabase
+          .from("files")
+          .select("*")
+          .eq("id", fileId)
+          .single();
+
+        if (fileError || !fileData) {
+          console.error(`File not found: ${fileId}`, fileError);
+          continue;
         }
-      );
 
-      const files = await fileResponse.json();
-      if (!files || files.length === 0) {
-        console.error(`File not found: ${fileId}`);
-        continue;
-      }
+        console.log(`Processing file: ${fileData.file_name} at ${fileData.storage_path}`);
 
-      const file = files[0];
+        const { data: downloadData, error: downloadError } = await supabase.storage
+          .from("medical-documents")
+          .download(fileData.storage_path);
 
-      const documentText = await extractTextFromFile(new ArrayBuffer(0), file.file_type);
+        if (downloadError || !downloadData) {
+          console.error(`Failed to download file: ${fileId}`, downloadError);
 
-      const aiParsedData = await parseWithAI(documentText, customization);
+          await supabase.from("parsed_documents").insert({
+            file_id: fileId,
+            session_id: sessionId,
+            user_id: fileData.user_id,
+            parsing_status: "failed",
+            error_message: `Failed to download file: ${downloadError?.message || "Unknown error"}`,
+          });
 
-      const structured_data = {
-        profile_name: aiParsedData.profile_name,
-        report_date: aiParsedData.report_date,
-        lab_name: aiParsedData.lab_name,
-        doctor_name: aiParsedData.doctor_name,
-        key_metrics: aiParsedData.key_metrics,
-        summary: aiParsedData.summary,
-      };
+          continue;
+        }
 
-      const confidence = {
-        overall: 0.92,
-        extraction: 0.90,
-        key_metrics: 0.93,
-      };
+        const arrayBuffer = await downloadData.arrayBuffer();
 
-      parsedDocuments.push({
-        fileId: file.id,
-        fileName: file.file_name,
-        structured_data,
-        raw_content: documentText,
-        confidence_scores: confidence,
-        metadata: {
-          file_type: file.file_type,
-          extraction_method: "ai-powered",
-          ai_model: "claude-3-haiku",
-        },
-      });
+        console.log(`Extracting text from ${fileData.file_name}...`);
+        const documentText = await extractTextFromFile(
+          arrayBuffer,
+          fileData.file_type,
+          fileData.file_name
+        );
 
-      await fetch(`${supabaseUrl}/rest/v1/parsed_documents`, {
-        method: "POST",
-        headers: {
-          "apikey": supabaseServiceKey,
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-          "Content-Type": "application/json",
-          "Prefer": "return=minimal",
-        },
-        body: JSON.stringify({
-          file_id: file.id,
+        console.log(`Extracted ${documentText.length} characters`);
+
+        if (!documentText || documentText.length < 50) {
+          throw new Error("Insufficient text extracted from document");
+        }
+
+        console.log(`Parsing with AI...`);
+        const aiParsedData = await parseWithAI(documentText, customization);
+
+        const structured_data = {
+          profile_name: aiParsedData.profile_name || "",
+          report_date: aiParsedData.report_date || "",
+          lab_name: aiParsedData.lab_name || "",
+          doctor_name: aiParsedData.doctor_name || "",
+          key_metrics: aiParsedData.key_metrics || [],
+          summary: aiParsedData.summary || "",
+        };
+
+        const confidence = {
+          overall: 0.92,
+          extraction: 0.90,
+          key_metrics: 0.93,
+        };
+
+        parsedDocuments.push({
+          fileId: fileData.id,
+          fileName: fileData.file_name,
+          structured_data,
+          raw_content: documentText.substring(0, 10000),
+          confidence_scores: confidence,
+          metadata: {
+            file_type: fileData.file_type,
+            extraction_method: "ai-powered",
+            ai_model: "claude-3-haiku",
+            text_length: documentText.length,
+          },
+        });
+
+        await supabase.from("parsed_documents").insert({
+          file_id: fileData.id,
           session_id: sessionId,
-          user_id: file.user_id,
+          user_id: fileData.user_id,
           parsing_status: "completed",
-          raw_content: documentText,
+          raw_content: documentText.substring(0, 10000),
           structured_data,
           confidence_scores: confidence,
           metadata: {
-            file_type: file.file_type,
+            file_type: fileData.file_type,
             extraction_method: "ai-powered",
             ai_model: "claude-3-haiku",
+            text_length: documentText.length,
           },
+        });
+
+        console.log(`Successfully parsed ${fileData.file_name}`);
+      } catch (fileError: any) {
+        console.error(`Error processing file ${fileId}:`, fileError);
+
+        await supabase.from("parsed_documents").insert({
+          file_id: fileId,
+          session_id: sessionId,
+          parsing_status: "failed",
+          error_message: fileError.message || "Unknown error during parsing",
+        });
+      }
+    }
+
+    if (parsedDocuments.length === 0) {
+      return new Response(
+        JSON.stringify({
+          error: "No documents were successfully parsed",
+          details: "Check logs for specific errors",
         }),
-      });
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     return new Response(
@@ -296,6 +347,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         parsed_documents: parsedDocuments,
         total_processed: parsedDocuments.length,
+        total_requested: fileIds.length,
         ai_powered: true,
       }),
       {
