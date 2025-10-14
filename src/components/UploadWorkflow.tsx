@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye } from 'lucide-react';
+import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DocumentReview } from './DocumentReview';
 import { DataPreview } from './DataPreview';
+import { ParsedDataReview } from './ParsedDataReview';
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -15,7 +16,9 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [showReview, setShowReview] = useState(false);
+  const [showParsedDataReview, setShowParsedDataReview] = useState(false);
   const [showDataPreview, setShowDataPreview] = useState(false);
+  const [parsingInProgress, setParsingInProgress] = useState(false);
 
   const [files, setFiles] = useState<File[]>([]);
   const [tone, setTone] = useState<'friendly' | 'professional' | 'empathetic'>('friendly');
@@ -41,6 +44,22 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleRemoveFile = (index: number) => {
     setFiles(files.filter((_, i) => i !== index));
+  };
+
+  const handlePreviewFile = (file: File) => {
+    const url = URL.createObjectURL(file);
+    window.open(url, '_blank');
+  };
+
+  const handleDownloadFile = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleStep1Next = async () => {
@@ -76,6 +95,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       if (sessionError) throw sessionError;
       setSessionId(session.id);
 
+      const uploadedFileIds: string[] = [];
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const filePath = `${user.id}/${session.id}/${file.name}`;
@@ -85,28 +106,68 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
         if (uploadError) throw uploadError;
 
-        const { error: insertError } = await supabase.from('files').insert({
-          session_id: session.id,
-          user_id: user.id,
-          storage_path: filePath,
-          file_name: file.name,
-          file_type: file.type,
-          file_size: file.size,
-        });
+        const { data: fileData, error: insertError } = await supabase.from('files')
+          .insert({
+            session_id: session.id,
+            user_id: user.id,
+            storage_path: filePath,
+            file_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+          })
+          .select()
+          .single();
 
         if (insertError) {
           console.error('File insert error:', insertError);
           throw insertError;
         }
+
+        if (fileData) {
+          uploadedFileIds.push(fileData.id);
+        }
       }
 
-      setTimeout(() => {
-        setProcessing(false);
+      setProcessing(false);
+      setParsingInProgress(true);
+
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-documents`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              sessionId: session.id,
+              fileIds: uploadedFileIds,
+              customization: {
+                tone,
+                language: languageLevel,
+              },
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to parse documents');
+        }
+
+        setParsingInProgress(false);
+        setShowParsedDataReview(true);
+      } catch (parseError: any) {
+        console.error('Parsing error:', parseError);
+        setParsingInProgress(false);
+        alert(`Document parsing failed: ${parseError.message}. You can still continue.`);
         setShowReview(true);
-      }, 1000);
+      }
     } catch (error: any) {
       alert(`Upload failed: ${error.message}`);
       setProcessing(false);
+      setParsingInProgress(false);
     }
   };
 
@@ -135,12 +196,24 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setSessionId(null);
     setUploadComplete(false);
     setShowReview(false);
+    setShowParsedDataReview(false);
     setShowDataPreview(false);
+    setParsingInProgress(false);
   };
 
   const handleReviewContinue = () => {
     setShowReview(false);
     setCurrentStep(2);
+  };
+
+  const handleParsedDataContinue = () => {
+    setShowParsedDataReview(false);
+    setCurrentStep(2);
+  };
+
+  const handleParsedDataBack = () => {
+    setShowParsedDataReview(false);
+    setCurrentStep(1);
   };
 
   const handleReviewBack = () => {
@@ -160,6 +233,43 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setShowDataPreview(false);
     setCurrentStep(4);
   };
+
+  if (showParsedDataReview && sessionId) {
+    return (
+      <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="min-h-screen px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Upload Health Report
+                </h1>
+                <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Step 2: Review Parsed Data
+                </p>
+              </div>
+              <button
+                onClick={onCancel}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <ParsedDataReview
+                sessionId={sessionId}
+                darkMode={darkMode}
+                onConfirm={handleParsedDataContinue}
+                onBack={handleParsedDataBack}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (showDataPreview && sessionId) {
     return (
@@ -366,42 +476,92 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     {files.map((file, index) => (
                       <div
                         key={index}
-                        className={`flex items-center justify-between p-3 rounded-lg ${
-                          darkMode ? 'bg-gray-700' : 'bg-gray-100'
+                        className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                          darkMode
+                            ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                            : 'bg-white border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <div className="flex items-center space-x-3">
-                          <FileText className="w-5 h-5 text-green-500" />
-                          <div>
-                            <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        <div className="flex items-center space-x-4 flex-1">
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                            darkMode ? 'bg-green-500/20' : 'bg-green-50'
+                          }`}>
+                            <FileText className="w-6 h-6 text-green-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                               {file.name}
                             </p>
-                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                            <p className={`text-xs mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type.split('/')[1]?.toUpperCase() || 'FILE'}
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveFile(index)}
-                          className={`p-1 rounded hover:bg-red-500/20 text-red-500 transition-colors`}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center space-x-2 ml-4">
+                          {/* Preview Button */}
+                          {(file.type.startsWith('image/') || file.type === 'application/pdf') && (
+                            <button
+                              onClick={() => handlePreviewFile(file)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                darkMode
+                                  ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                                  : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                              }`}
+                              title="Preview"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          )}
+                          {/* Download Button */}
+                          <button
+                            onClick={() => handleDownloadFile(file)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              darkMode
+                                ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                                : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                            }`}
+                            title="Download"
+                          >
+                            <Download className="w-5 h-5" />
+                          </button>
+                          {/* Delete Button */}
+                          <button
+                            onClick={() => handleRemoveFile(index)}
+                            className="p-2 rounded-lg text-red-500 hover:bg-red-500/20 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleStep1Next}
-                    disabled={files.length === 0 || processing}
-                    className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    <span>{processing ? 'Uploading...' : 'Next: Review'}</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </div>
+                {(processing || parsingInProgress) && (
+                  <div className="text-center py-6">
+                    <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {processing ? 'Uploading files...' : 'Parsing documents with AI...'}
+                    </p>
+                    <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {processing ? 'Please wait while we upload your documents' : 'Extracting health information from your documents'}
+                    </p>
+                  </div>
+                )}
+
+                {!processing && !parsingInProgress && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleStep1Next}
+                      disabled={files.length === 0}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      <span>Next: Review</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
