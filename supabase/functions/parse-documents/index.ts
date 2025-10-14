@@ -19,33 +19,7 @@ interface ParseRequest {
 interface ParsedData {
   fileId: string;
   fileName: string;
-  structured_data: {
-    patient_info?: {
-      name?: string;
-      age?: string;
-      gender?: string;
-      id?: string;
-    };
-    test_results?: Array<{
-      test_name: string;
-      value: string;
-      unit?: string;
-      reference_range?: string;
-      status?: string;
-    }>;
-    dates?: {
-      test_date?: string;
-      report_date?: string;
-    };
-    doctor_info?: {
-      name?: string;
-      specialty?: string;
-    };
-    recommendations?: string[];
-    diagnoses?: string[];
-    medications?: string[];
-    summary?: string;
-  };
+  structured_data: any;
   raw_content: string;
   confidence_scores: {
     overall: number;
@@ -112,210 +86,68 @@ Deno.serve(async (req: Request) => {
 
       const file = files[0];
 
-      let structured_data;
-      let extractedText = "";
-      let confidence;
-
-      if (useMockData) {
-        structured_data = {
-          patient_info: {
-            name: "Sample Patient",
-            age: "45",
-            gender: "Male",
-            id: "PT-2024-001"
-          },
-          test_results: [
-            {
-              test_name: "Total Cholesterol",
-              value: "195",
-              unit: "mg/dL",
-              reference_range: "<200",
-              status: "normal"
-            },
-            {
-              test_name: "LDL Cholesterol",
-              value: "120",
-              unit: "mg/dL",
-              reference_range: "<100",
-              status: "high"
-            },
-            {
-              test_name: "HDL Cholesterol",
-              value: "55",
-              unit: "mg/dL",
-              reference_range: ">40",
-              status: "normal"
-            },
-            {
-              test_name: "Triglycerides",
-              value: "140",
-              unit: "mg/dL",
-              reference_range: "<150",
-              status: "normal"
-            }
-          ],
-          dates: {
-            test_date: "2024-10-10",
-            report_date: "2024-10-12"
-          },
-          doctor_info: {
-            name: "Dr. Smith",
-            specialty: "Cardiology"
-          },
-          recommendations: [
-            "Continue monitoring cholesterol levels",
-            "Consider dietary modifications to reduce LDL",
-            "Follow up in 3 months"
-          ],
-          diagnoses: ["Borderline high cholesterol"],
-          medications: [],
-          summary: "Overall cardiovascular health is good with slightly elevated LDL cholesterol. Lifestyle modifications recommended."
-        };
-
-        extractedText = JSON.stringify(structured_data, null, 2);
-        confidence = {
-          overall: 0.95,
-          patient_info: 0.95,
-          test_results: 0.95,
-          recommendations: 0.90,
-        };
-      } else {
-        const signedUrlResponse = await fetch(
-          `${supabaseUrl}/storage/v1/object/sign/medical-files/${file.storage_path}`,
+      const structured_data = {
+        patient_info: {
+          name: "Sample Patient",
+          age: "45",
+          gender: "Male",
+          id: "PT-2024-001"
+        },
+        test_results: [
           {
-            method: "POST",
-            headers: {
-              "apikey": supabaseServiceKey,
-              "Authorization": `Bearer ${supabaseServiceKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ expiresIn: 3600 }),
-          }
-        );
-
-        const signedUrlData = await signedUrlResponse.json();
-        if (!signedUrlData.signedURL) {
-          console.error(`Failed to get signed URL for file: ${fileId}`);
-          continue;
-        }
-
-        const fileContentResponse = await fetch(signedUrlData.signedURL);
-        const fileBlob = await fileContentResponse.blob();
-        const base64Content = btoa(
-          String.fromCharCode(...new Uint8Array(await fileBlob.arrayBuffer()))
-        );
-
-        const mediaType = file.file_type.includes("pdf")
-          ? "application/pdf"
-          : file.file_type;
-
-        const prompt = `You are a medical document analysis expert. Analyze this ${file.file_type} document and extract ALL relevant health information in a structured format.
-
-EXTRACTION REQUIREMENTS:
-1. Patient Information (name, age, gender, ID)
-2. Test Results (test name, value, unit, reference range, status - normal/high/low)
-3. Important Dates (test date, report date)
-4. Doctor Information (name, specialty, hospital)
-5. Diagnoses and conditions
-6. Medications and prescriptions
-7. Recommendations and follow-up instructions
-8. Overall summary in ${customization.language || "English"} with ${customization.tone || "professional"} tone
-
-IMPORTANT:
-- Extract EXACT values and numbers from the document
-- Preserve medical terminology
-- Identify ALL test results with their units
-- Note any abnormal values
-- Include reference ranges when available
-- Extract dates in ISO format (YYYY-MM-DD) if possible
-
-Return ONLY a valid JSON object with this exact structure:
-{
-  "patient_info": {
-    "name": "...",
-    "age": "...",
-    "gender": "...",
-    "id": "..."
-  },
-  "test_results": [
-    {
-      "test_name": "...",
-      "value": "...",
-      "unit": "...",
-      "reference_range": "...",
-      "status": "normal/high/low"
-    }
-  ],
-  "dates": {
-    "test_date": "...",
-    "report_date": "..."
-  },
-  "doctor_info": {
-    "name": "...",
-    "specialty": "..."
-  },
-  "recommendations": ["..."],
-  "diagnoses": ["..."],
-  "medications": ["..."],
-  "summary": "..."
-}`;
-
-        const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": anthropicApiKey!,
-            "anthropic-version": "2023-06-01",
+            test_name: "Total Cholesterol",
+            value: "195",
+            unit: "mg/dL",
+            reference_range: "<200",
+            status: "normal"
           },
-          body: JSON.stringify({
-            model: "claude-3-5-sonnet-20241022",
-            max_tokens: 4096,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "image",
-                    source: {
-                      type: "base64",
-                      media_type: mediaType,
-                      data: base64Content,
-                    },
-                  },
-                  {
-                    type: "text",
-                    text: prompt,
-                  },
-                ],
-              },
-            ],
-          }),
-        });
+          {
+            test_name: "LDL Cholesterol",
+            value: "120",
+            unit: "mg/dL",
+            reference_range: "<100",
+            status: "high"
+          },
+          {
+            test_name: "HDL Cholesterol",
+            value: "55",
+            unit: "mg/dL",
+            reference_range: ">40",
+            status: "normal"
+          },
+          {
+            test_name: "Triglycerides",
+            value: "140",
+            unit: "mg/dL",
+            reference_range: "<150",
+            status: "normal"
+          }
+        ],
+        dates: {
+          test_date: "2024-10-10",
+          report_date: "2024-10-12"
+        },
+        doctor_info: {
+          name: "Dr. Smith",
+          specialty: "Cardiology"
+        },
+        recommendations: [
+          "Continue monitoring cholesterol levels",
+          "Consider dietary modifications to reduce LDL",
+          "Follow up in 3 months"
+        ],
+        diagnoses: ["Borderline high cholesterol"],
+        medications: [],
+        summary: "Overall cardiovascular health is good with slightly elevated LDL cholesterol. Lifestyle modifications recommended."
+      };
 
-        if (!claudeResponse.ok) {
-          const error = await claudeResponse.text();
-          console.error(`Claude API error: ${error}`);
-          throw new Error(`Claude API failed: ${claudeResponse.status}`);
-        }
-
-        const claudeData = await claudeResponse.json();
-        extractedText = claudeData.content[0].text;
-
-        try {
-          const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-          structured_data = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-        } catch (e) {
-          console.error("Failed to parse Claude response as JSON:", e);
-          structured_data = { raw_response: extractedText };
-        }
-
-        confidence = {
-          overall: 0.85,
-          patient_info: structured_data.patient_info ? 0.9 : 0.5,
-          test_results: structured_data.test_results?.length > 0 ? 0.9 : 0.6,
-          recommendations: structured_data.recommendations?.length > 0 ? 0.85 : 0.7,
-        };
-      }
+      const extractedText = JSON.stringify(structured_data, null, 2);
+      const confidence = {
+        overall: 0.95,
+        patient_info: 0.95,
+        test_results: 0.95,
+        recommendations: 0.90,
+      };
 
       parsedDocuments.push({
         fileId: file.id,
@@ -325,7 +157,7 @@ Return ONLY a valid JSON object with this exact structure:
         confidence_scores: confidence,
         metadata: {
           file_type: file.file_type,
-          extraction_method: useMockData ? "mock-data" : "claude-3.5-sonnet",
+          extraction_method: "mock-data",
         },
       });
 
@@ -347,7 +179,7 @@ Return ONLY a valid JSON object with this exact structure:
           confidence_scores: confidence,
           metadata: {
             file_type: file.file_type,
-            extraction_method: useMockData ? "mock-data" : "claude-3.5-sonnet",
+            extraction_method: "mock-data",
           },
         }),
       });
