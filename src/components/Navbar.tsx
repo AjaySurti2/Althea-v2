@@ -35,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-3">
             <img
-              src="/Althea Logo Green.jpg"
+              src="/Althea%20Logo%20Green.jpg"
               alt="Althea Logo"
               className="h-10 w-10 rounded-lg object-cover"
             />
