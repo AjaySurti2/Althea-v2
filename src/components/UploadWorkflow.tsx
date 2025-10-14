@@ -186,32 +186,41 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     }
 
     try {
+      console.log('Fetching parsed documents for session:', sessionId, 'user:', user.id);
+
       const { data: parsedDocs, error } = await supabase
         .from('parsed_documents')
         .select('*')
-        .eq('session_id', sessionId)
-        .eq('user_id', user.id);
+        .eq('session_id', sessionId);
 
-      if (error) throw error;
+      console.log('Parsed docs response:', { data: parsedDocs, error });
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       if (!parsedDocs || parsedDocs.length === 0) {
-        alert('No parsed data available to generate report');
+        console.warn('No parsed documents found for session:', sessionId);
+        alert('No parsed data available to generate report. Please complete the document parsing step first.');
         return;
       }
 
+      console.log('Generating PDF for', parsedDocs.length, 'documents');
       generatePDFReport(parsedDocs);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error downloading report:', error);
-      alert('Failed to download report. Please try again.');
+      alert(`Failed to download report: ${error.message || 'Unknown error'}. Please try again.`);
     }
   };
 
   const generatePDFReport = (parsedDocs: any[]) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow pop-ups to download the report');
-      return;
-    }
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Please allow pop-ups to download the report');
+        return;
+      }
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -356,7 +365,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           </div>
 
           ${parsedDocs.map((doc, index) => {
-            const data = doc.structured_data;
+            const data = doc.structured_data || {};
+            const safeValue = (value: any) => value ? String(value).replace(/[<>]/g, '') : '';
             return `
               ${index > 0 ? '<div style="page-break-before: always;"></div>' : ''}
 
@@ -367,28 +377,28 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div class="section">
                     <h3 class="section-title">Patient Information</h3>
                     <div class="info-grid">
-                      ${data.patient_info.name ? `
+                      ${data.patient_info?.name ? `
                         <div class="info-item">
                           <div class="info-label">Name</div>
-                          <div class="info-value">${data.patient_info.name}</div>
+                          <div class="info-value">${safeValue(data.patient_info.name)}</div>
                         </div>
                       ` : ''}
-                      ${data.patient_info.age ? `
+                      ${data.patient_info?.age ? `
                         <div class="info-item">
                           <div class="info-label">Age</div>
-                          <div class="info-value">${data.patient_info.age}</div>
+                          <div class="info-value">${safeValue(data.patient_info.age)}</div>
                         </div>
                       ` : ''}
-                      ${data.patient_info.gender ? `
+                      ${data.patient_info?.gender ? `
                         <div class="info-item">
                           <div class="info-label">Gender</div>
-                          <div class="info-value">${data.patient_info.gender}</div>
+                          <div class="info-value">${safeValue(data.patient_info.gender)}</div>
                         </div>
                       ` : ''}
-                      ${data.patient_info.id ? `
+                      ${data.patient_info?.id ? `
                         <div class="info-item">
                           <div class="info-label">Patient ID</div>
-                          <div class="info-value">${data.patient_info.id}</div>
+                          <div class="info-value">${safeValue(data.patient_info.id)}</div>
                         </div>
                       ` : ''}
                     </div>
@@ -516,8 +526,12 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       </html>
     `;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF report. Please try again.');
+    }
   };
 
   const handleViewDashboard = () => {
