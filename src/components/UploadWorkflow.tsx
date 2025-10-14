@@ -234,13 +234,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       console.log('=== Generating PDF ===');
       console.log('Documents received:', parsedDocs.length);
 
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Please allow pop-ups to download the report');
-        return;
-      }
-
-    const htmlContent = `
+      const htmlContent = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -554,19 +548,22 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             <p>Please consult with a healthcare professional for medical advice.</p>
           </div>
 
-          <script>
-            window.onload = function() {
-              setTimeout(() => {
-                window.print();
-              }, 500);
-            };
-          </script>
         </body>
       </html>
     `;
 
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Althea_Medical_Report_${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log('Report downloaded successfully');
+      alert('Your medical report has been downloaded. Open it in your browser and use Print to save as PDF.');
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF report. Please try again.');
@@ -1177,7 +1174,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     <li className="flex items-start space-x-3">
                       <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                       <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
-                        Download it as a PDF or view in your dashboard
+                        Download as HTML and print to PDF, or view in your dashboard
                       </span>
                     </li>
                     <li className="flex items-start space-x-3">
@@ -1195,7 +1192,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     className="w-full flex items-center justify-center space-x-2 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                   >
                     <Download className="w-5 h-5" />
-                    <span>Download Report (PDF)</span>
+                    <span>Download Report (HTML)</span>
                   </button>
 
                   <button
