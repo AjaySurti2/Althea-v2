@@ -179,8 +179,345 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     }, 2000);
   };
 
-  const handleDownloadReport = () => {
-    setUploadComplete(true);
+  const handleDownloadReport = async () => {
+    if (!sessionId || !user) {
+      alert('No session data available');
+      return;
+    }
+
+    try {
+      const { data: parsedDocs, error } = await supabase
+        .from('parsed_documents')
+        .select('*')
+        .eq('session_id', sessionId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      if (!parsedDocs || parsedDocs.length === 0) {
+        alert('No parsed data available to generate report');
+        return;
+      }
+
+      generatePDFReport(parsedDocs);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Failed to download report. Please try again.');
+    }
+  };
+
+  const generatePDFReport = (parsedDocs: any[]) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow pop-ups to download the report');
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Medical Report - Althea AI</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              padding: 40px;
+              color: #333;
+              line-height: 1.6;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 40px;
+              padding-bottom: 20px;
+              border-bottom: 3px solid #10b981;
+            }
+            .header h1 {
+              color: #10b981;
+              font-size: 32px;
+              margin-bottom: 10px;
+            }
+            .header p {
+              color: #666;
+              font-size: 14px;
+            }
+            .section {
+              margin-bottom: 30px;
+              page-break-inside: avoid;
+            }
+            .section-title {
+              font-size: 20px;
+              color: #10b981;
+              margin-bottom: 15px;
+              padding-bottom: 8px;
+              border-bottom: 2px solid #e5e7eb;
+            }
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 15px;
+              margin-bottom: 20px;
+            }
+            .info-item {
+              padding: 12px;
+              background: #f9fafb;
+              border-radius: 8px;
+            }
+            .info-label {
+              font-weight: 600;
+              color: #6b7280;
+              font-size: 12px;
+              text-transform: uppercase;
+              margin-bottom: 4px;
+            }
+            .info-value {
+              color: #111827;
+              font-size: 16px;
+            }
+            .test-results {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 15px;
+            }
+            .test-results th {
+              background: #10b981;
+              color: white;
+              padding: 12px;
+              text-align: left;
+              font-weight: 600;
+            }
+            .test-results td {
+              padding: 12px;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            .test-results tr:hover {
+              background: #f9fafb;
+            }
+            .status-normal {
+              color: #10b981;
+              font-weight: 600;
+            }
+            .status-high {
+              color: #ef4444;
+              font-weight: 600;
+            }
+            .status-low {
+              color: #f59e0b;
+              font-weight: 600;
+            }
+            .recommendations {
+              list-style: none;
+              padding: 0;
+            }
+            .recommendations li {
+              padding: 10px;
+              margin-bottom: 8px;
+              background: #ecfdf5;
+              border-left: 4px solid #10b981;
+              border-radius: 4px;
+            }
+            .summary-box {
+              background: #f0fdf4;
+              border: 2px solid #10b981;
+              border-radius: 8px;
+              padding: 20px;
+              margin-top: 15px;
+            }
+            .footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 2px solid #e5e7eb;
+              text-align: center;
+              color: #6b7280;
+              font-size: 12px;
+            }
+            @media print {
+              body {
+                padding: 20px;
+              }
+              .section {
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Medical Report</h1>
+            <p>Generated by Althea AI - ${new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}</p>
+          </div>
+
+          ${parsedDocs.map((doc, index) => {
+            const data = doc.structured_data;
+            return `
+              ${index > 0 ? '<div style="page-break-before: always;"></div>' : ''}
+
+              <div class="section">
+                <h2 class="section-title">Document ${index + 1}</h2>
+
+                ${data.patient_info ? `
+                  <div class="section">
+                    <h3 class="section-title">Patient Information</h3>
+                    <div class="info-grid">
+                      ${data.patient_info.name ? `
+                        <div class="info-item">
+                          <div class="info-label">Name</div>
+                          <div class="info-value">${data.patient_info.name}</div>
+                        </div>
+                      ` : ''}
+                      ${data.patient_info.age ? `
+                        <div class="info-item">
+                          <div class="info-label">Age</div>
+                          <div class="info-value">${data.patient_info.age}</div>
+                        </div>
+                      ` : ''}
+                      ${data.patient_info.gender ? `
+                        <div class="info-item">
+                          <div class="info-label">Gender</div>
+                          <div class="info-value">${data.patient_info.gender}</div>
+                        </div>
+                      ` : ''}
+                      ${data.patient_info.id ? `
+                        <div class="info-item">
+                          <div class="info-label">Patient ID</div>
+                          <div class="info-value">${data.patient_info.id}</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                ` : ''}
+
+                ${data.dates ? `
+                  <div class="section">
+                    <h3 class="section-title">Dates</h3>
+                    <div class="info-grid">
+                      ${data.dates.test_date ? `
+                        <div class="info-item">
+                          <div class="info-label">Test Date</div>
+                          <div class="info-value">${data.dates.test_date}</div>
+                        </div>
+                      ` : ''}
+                      ${data.dates.report_date ? `
+                        <div class="info-item">
+                          <div class="info-label">Report Date</div>
+                          <div class="info-value">${data.dates.report_date}</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                ` : ''}
+
+                ${data.doctor_info ? `
+                  <div class="section">
+                    <h3 class="section-title">Healthcare Provider</h3>
+                    <div class="info-grid">
+                      ${data.doctor_info.name ? `
+                        <div class="info-item">
+                          <div class="info-label">Doctor</div>
+                          <div class="info-value">${data.doctor_info.name}</div>
+                        </div>
+                      ` : ''}
+                      ${data.doctor_info.specialty ? `
+                        <div class="info-item">
+                          <div class="info-label">Specialty</div>
+                          <div class="info-value">${data.doctor_info.specialty}</div>
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                ` : ''}
+
+                ${data.test_results && data.test_results.length > 0 ? `
+                  <div class="section">
+                    <h3 class="section-title">Test Results</h3>
+                    <table class="test-results">
+                      <thead>
+                        <tr>
+                          <th>Test Name</th>
+                          <th>Value</th>
+                          <th>Reference Range</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${data.test_results.map(test => `
+                          <tr>
+                            <td>${test.test_name}</td>
+                            <td>${test.value}${test.unit ? ' ' + test.unit : ''}</td>
+                            <td>${test.reference_range || 'N/A'}</td>
+                            <td class="status-${test.status || 'normal'}">${(test.status || 'normal').toUpperCase()}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                ` : ''}
+
+                ${data.diagnoses && data.diagnoses.length > 0 ? `
+                  <div class="section">
+                    <h3 class="section-title">Diagnoses</h3>
+                    <ul class="recommendations">
+                      ${data.diagnoses.map(diagnosis => `<li>${diagnosis}</li>`).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
+
+                ${data.medications && data.medications.length > 0 ? `
+                  <div class="section">
+                    <h3 class="section-title">Medications</h3>
+                    <ul class="recommendations">
+                      ${data.medications.map(med => `<li>${med}</li>`).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
+
+                ${data.recommendations && data.recommendations.length > 0 ? `
+                  <div class="section">
+                    <h3 class="section-title">Recommendations</h3>
+                    <ul class="recommendations">
+                      ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
+
+                ${data.summary ? `
+                  <div class="section">
+                    <h3 class="section-title">Summary</h3>
+                    <div class="summary-box">
+                      ${data.summary}
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+
+          <div class="footer">
+            <p>This report was generated by Althea AI for informational purposes only.</p>
+            <p>Please consult with a healthcare professional for medical advice.</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(() => {
+                window.print();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handleViewDashboard = () => {
