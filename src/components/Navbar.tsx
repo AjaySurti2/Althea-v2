@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Moon, Sun, Menu, X, User, ChevronDown, LogOut } from 'lucide-react';
+import { Moon, Sun, Menu, X, User, ChevronDown, LogOut, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NavbarProps {
@@ -34,11 +34,9 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-3">
-            <img
-              src="/Althea%20Logo%20Green.jpg"
-              alt="Althea Logo"
-              className="h-10 w-10 rounded-lg object-cover"
-            />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
+              <Activity className="h-6 w-6 text-white" />
+            </div>
             <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Althea
             </span>
