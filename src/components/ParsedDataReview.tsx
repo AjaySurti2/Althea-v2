@@ -15,6 +15,18 @@ interface ParsedDocument {
   file_name?: string;
   parsing_status: string;
   structured_data: {
+    profile_name?: string;
+    report_date?: string;
+    lab_name?: string;
+    doctor_name?: string;
+    key_metrics?: Array<{
+      test_name: string;
+      value: string;
+      unit?: string;
+      reference_range?: string;
+      interpretation?: string;
+    }>;
+    summary?: string;
     patient_info?: {
       name?: string;
       age?: string;
@@ -36,17 +48,8 @@ interface ParsedDocument {
       name?: string;
       specialty?: string;
     };
-    recommendations?: string[];
-    diagnoses?: string[];
-    medications?: string[];
-    summary?: string;
   };
-  confidence_scores: {
-    overall: number;
-    patient_info: number;
-    test_results: number;
-    recommendations: number;
-  };
+  confidence_scores: any;
 }
 
 export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
@@ -106,16 +109,12 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
 
   const getStatusColor = (status?: string) => {
     if (!status) return darkMode ? 'text-gray-400' : 'text-gray-600';
-    switch (status.toLowerCase()) {
-      case 'normal':
-        return 'text-green-600';
-      case 'high':
-        return 'text-red-600';
-      case 'low':
-        return 'text-amber-600';
-      default:
-        return darkMode ? 'text-gray-400' : 'text-gray-600';
-    }
+    const normalized = status.toLowerCase();
+    if (normalized.includes('normal')) return 'text-green-600';
+    if (normalized.includes('high') || normalized.includes('elevated')) return 'text-red-600';
+    if (normalized.includes('low')) return 'text-amber-600';
+    if (normalized.includes('borderline')) return 'text-orange-600';
+    return darkMode ? 'text-gray-400' : 'text-gray-600';
   };
 
   const formatDate = (dateString?: string) => {
@@ -222,7 +221,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {doc.structured_data.patient_info && (
+              {(doc.structured_data.profile_name || doc.structured_data.patient_info) && (
                 <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
                   <div className="flex items-center space-x-2 mb-3">
                     <User className="w-5 h-5 text-blue-600" />
@@ -231,7 +230,15 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    {doc.structured_data.patient_info.name && (
+                    {doc.structured_data.profile_name && (
+                      <div>
+                        <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Patient:</span>
+                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {doc.structured_data.profile_name}
+                        </p>
+                      </div>
+                    )}
+                    {doc.structured_data.patient_info?.name && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Name:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -239,7 +246,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </p>
                       </div>
                     )}
-                    {doc.structured_data.patient_info.age && (
+                    {doc.structured_data.patient_info?.age && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Age:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -247,7 +254,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </p>
                       </div>
                     )}
-                    {doc.structured_data.patient_info.gender && (
+                    {doc.structured_data.patient_info?.gender && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Gender:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -259,7 +266,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                 </div>
               )}
 
-              {doc.structured_data.dates && (
+              {(doc.structured_data.report_date || doc.structured_data.dates) && (
                 <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
                   <div className="flex items-center space-x-2 mb-3">
                     <Calendar className="w-5 h-5 text-purple-600" />
@@ -268,7 +275,15 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    {doc.structured_data.dates.report_date && (
+                    {doc.structured_data.report_date && (
+                      <div>
+                        <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Report Date:</span>
+                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {doc.structured_data.report_date}
+                        </p>
+                      </div>
+                    )}
+                    {doc.structured_data.dates?.report_date && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Report Date:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -276,7 +291,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </p>
                       </div>
                     )}
-                    {doc.structured_data.dates.test_date && (
+                    {doc.structured_data.dates?.test_date && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Test Date:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -288,7 +303,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                 </div>
               )}
 
-              {doc.structured_data.doctor_info && (
+              {(doc.structured_data.lab_name || doc.structured_data.doctor_name || doc.structured_data.doctor_info) && (
                 <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
                   <div className="flex items-center space-x-2 mb-3">
                     <Stethoscope className="w-5 h-5 text-teal-600" />
@@ -297,7 +312,23 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    {doc.structured_data.doctor_info.name && (
+                    {doc.structured_data.lab_name && (
+                      <div>
+                        <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Lab:</span>
+                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {doc.structured_data.lab_name}
+                        </p>
+                      </div>
+                    )}
+                    {doc.structured_data.doctor_name && (
+                      <div>
+                        <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Doctor:</span>
+                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {doc.structured_data.doctor_name}
+                        </p>
+                      </div>
+                    )}
+                    {doc.structured_data.doctor_info?.name && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Name:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -305,7 +336,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </p>
                       </div>
                     )}
-                    {doc.structured_data.doctor_info.specialty && (
+                    {doc.structured_data.doctor_info?.specialty && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Specialty:</span>
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -317,7 +348,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                 </div>
               )}
 
-              {doc.structured_data.test_results && doc.structured_data.test_results.length > 0 && (
+              {((doc.structured_data.key_metrics && doc.structured_data.key_metrics.length > 0) || (doc.structured_data.test_results && doc.structured_data.test_results.length > 0)) && (
                 <div className={`p-4 rounded-lg md:col-span-2 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
                   <div className="flex items-center space-x-2 mb-3">
                     <Activity className="w-5 h-5 text-green-600" />
@@ -336,20 +367,20 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {doc.structured_data.test_results.map((test, idx) => (
+                        {(doc.structured_data.key_metrics || doc.structured_data.test_results || []).map((test: any, idx: number) => (
                           <tr key={idx} className={`border-b ${darkMode ? 'border-gray-800' : 'border-gray-100'}`}>
                             <td className={`py-2 px-2 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                               {test.test_name}
                             </td>
                             <td className={`py-2 px-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {test.value} {test.unit}
+                              {test.value} {test.unit || ''}
                             </td>
                             <td className={`py-2 px-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                               {test.reference_range || 'N/A'}
                             </td>
                             <td className={`py-2 px-2`}>
-                              <span className={`text-xs font-semibold uppercase ${getStatusColor(test.status)}`}>
-                                {test.status || 'N/A'}
+                              <span className={`text-xs font-semibold uppercase ${getStatusColor(test.interpretation || test.status)}`}>
+                                {test.interpretation || test.status || 'N/A'}
                               </span>
                             </td>
                           </tr>

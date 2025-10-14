@@ -367,20 +367,27 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           ${parsedDocs.map((doc, index) => {
             const data = doc.structured_data || {};
             const safeValue = (value: any) => value ? String(value).replace(/[<>]/g, '') : '';
+
+            const profileName = data.profile_name || data.patient_info?.name || '';
+            const reportDate = data.report_date || data.dates?.report_date || '';
+            const labName = data.lab_name || '';
+            const doctorName = data.doctor_name || data.doctor_info?.name || '';
+            const metrics = data.key_metrics || data.test_results || [];
+
             return `
               ${index > 0 ? '<div style="page-break-before: always;"></div>' : ''}
 
               <div class="section">
-                <h2 class="section-title">Document ${index + 1}</h2>
+                <h2 class="section-title">Medical Report ${index + 1}</h2>
 
-                ${data.patient_info ? `
+                ${(profileName || data.patient_info) ? `
                   <div class="section">
                     <h3 class="section-title">Patient Information</h3>
                     <div class="info-grid">
-                      ${data.patient_info?.name ? `
+                      ${profileName ? `
                         <div class="info-item">
-                          <div class="info-label">Name</div>
-                          <div class="info-value">${safeValue(data.patient_info.name)}</div>
+                          <div class="info-label">Patient Name</div>
+                          <div class="info-value">${safeValue(profileName)}</div>
                         </div>
                       ` : ''}
                       ${data.patient_info?.age ? `
@@ -405,47 +412,45 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   </div>
                 ` : ''}
 
-                ${data.dates ? `
+                ${(reportDate || labName || doctorName || data.doctor_info || data.dates) ? `
                   <div class="section">
-                    <h3 class="section-title">Dates</h3>
+                    <h3 class="section-title">Report Details</h3>
                     <div class="info-grid">
-                      ${data.dates.test_date ? `
-                        <div class="info-item">
-                          <div class="info-label">Test Date</div>
-                          <div class="info-value">${data.dates.test_date}</div>
-                        </div>
-                      ` : ''}
-                      ${data.dates.report_date ? `
+                      ${reportDate ? `
                         <div class="info-item">
                           <div class="info-label">Report Date</div>
-                          <div class="info-value">${data.dates.report_date}</div>
+                          <div class="info-value">${safeValue(reportDate)}</div>
                         </div>
                       ` : ''}
-                    </div>
-                  </div>
-                ` : ''}
-
-                ${data.doctor_info ? `
-                  <div class="section">
-                    <h3 class="section-title">Healthcare Provider</h3>
-                    <div class="info-grid">
-                      ${data.doctor_info.name ? `
+                      ${data.dates?.test_date ? `
                         <div class="info-item">
-                          <div class="info-label">Doctor</div>
-                          <div class="info-value">${data.doctor_info.name}</div>
+                          <div class="info-label">Test Date</div>
+                          <div class="info-value">${safeValue(data.dates.test_date)}</div>
                         </div>
                       ` : ''}
-                      ${data.doctor_info.specialty ? `
+                      ${labName ? `
+                        <div class="info-item">
+                          <div class="info-label">Laboratory</div>
+                          <div class="info-value">${safeValue(labName)}</div>
+                        </div>
+                      ` : ''}
+                      ${doctorName ? `
+                        <div class="info-item">
+                          <div class="info-label">Physician</div>
+                          <div class="info-value">${safeValue(doctorName)}</div>
+                        </div>
+                      ` : ''}
+                      ${data.doctor_info?.specialty ? `
                         <div class="info-item">
                           <div class="info-label">Specialty</div>
-                          <div class="info-value">${data.doctor_info.specialty}</div>
+                          <div class="info-value">${safeValue(data.doctor_info.specialty)}</div>
                         </div>
                       ` : ''}
                     </div>
                   </div>
                 ` : ''}
 
-                ${data.test_results && data.test_results.length > 0 ? `
+                ${metrics && metrics.length > 0 ? `
                   <div class="section">
                     <h3 class="section-title">Test Results</h3>
                     <table class="test-results">
@@ -458,12 +463,12 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         </tr>
                       </thead>
                       <tbody>
-                        ${data.test_results.map(test => `
+                        ${metrics.map(test => `
                           <tr>
-                            <td>${test.test_name}</td>
-                            <td>${test.value}${test.unit ? ' ' + test.unit : ''}</td>
-                            <td>${test.reference_range || 'N/A'}</td>
-                            <td class="status-${test.status || 'normal'}">${(test.status || 'normal').toUpperCase()}</td>
+                            <td>${safeValue(test.test_name)}</td>
+                            <td>${safeValue(test.value)}${test.unit ? ' ' + safeValue(test.unit) : ''}</td>
+                            <td>${safeValue(test.reference_range || 'N/A')}</td>
+                            <td class="status-${(test.interpretation || test.status || 'normal').toLowerCase()}">${safeValue((test.interpretation || test.status || 'normal')).toUpperCase()}</td>
                           </tr>
                         `).join('')}
                       </tbody>
