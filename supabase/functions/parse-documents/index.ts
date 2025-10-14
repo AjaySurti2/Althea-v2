@@ -297,7 +297,7 @@ Deno.serve(async (req: Request) => {
 
         try {
           const { data: downloadData, error: downloadError } = await supabase.storage
-            .from("medical-documents")
+            .from("medical-files")
             .download(fileData.storage_path);
 
           if (downloadError || !downloadData) {

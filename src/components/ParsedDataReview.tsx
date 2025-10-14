@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Calendar, Activity, FileText, Stethoscope } from 'lucide-react';
+import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Calendar, Activity, FileText, Stethoscope, Edit2, Save, X as XIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ParsedDataReviewProps {
@@ -61,6 +61,9 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
   const [parsedDocuments, setParsedDocuments] = useState<ParsedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingDoc, setEditingDoc] = useState<string | null>(null);
+  const [editedData, setEditedData] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadParsedDocuments();
@@ -128,6 +131,55 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
     } catch {
       return dateString;
     }
+  };
+
+  const handleEdit = (doc: ParsedDocument) => {
+    setEditingDoc(doc.id);
+    setEditedData(JSON.parse(JSON.stringify(doc.structured_data)));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingDoc(null);
+    setEditedData(null);
+  };
+
+  const handleSave = async (docId: string) => {
+    try {
+      setSaving(true);
+      const { error: updateError } = await supabase
+        .from('parsed_documents')
+        .update({ structured_data: editedData })
+        .eq('id', docId);
+
+      if (updateError) throw updateError;
+
+      setParsedDocuments(docs =>
+        docs.map(doc =>
+          doc.id === docId ? { ...doc, structured_data: editedData } : doc
+        )
+      );
+
+      setEditingDoc(null);
+      setEditedData(null);
+    } catch (err: any) {
+      console.error('Error saving changes:', err);
+      alert(`Failed to save changes: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateField = (field: string, value: any) => {
+    setEditedData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const updateMetric = (index: number, field: string, value: string) => {
+    setEditedData((prev: any) => ({
+      ...prev,
+      key_metrics: prev.key_metrics.map((m: any, i: number) =>
+        i === index ? { ...m, [field]: value } : m
+      )
+    }));
   };
 
   if (loading) {
@@ -212,12 +264,45 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                   </p>
                 </div>
               </div>
-              {doc.parsing_status === 'completed' && (
-                <div className="flex items-center space-x-2 text-green-600">
-                  <CheckCircle className="w-5 h-5" />
-                  <span className="text-sm font-medium">Parsed</span>
-                </div>
-              )}
+              <div className="flex items-center space-x-3">
+                {doc.parsing_status === 'completed' && (
+                  <div className="flex items-center space-x-2 text-green-600">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="text-sm font-medium">Parsed</span>
+                  </div>
+                )}
+                {editingDoc === doc.id ? (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleSave(doc.id)}
+                      disabled={saving}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{saving ? 'Saving...' : 'Save'}</span>
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleEdit(doc)}
+                    className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span>Edit</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -230,12 +315,23 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    {doc.structured_data.profile_name && (
+                    {(doc.structured_data.profile_name || editingDoc === doc.id) && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Patient:</span>
-                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {doc.structured_data.profile_name}
-                        </p>
+                        {editingDoc === doc.id ? (
+                          <input
+                            type="text"
+                            value={editedData.profile_name || ''}
+                            onChange={(e) => updateField('profile_name', e.target.value)}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
+                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          />
+                        ) : (
+                          <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {doc.structured_data.profile_name}
+                          </p>
+                        )}
                       </div>
                     )}
                     {doc.structured_data.patient_info?.name && (
@@ -275,12 +371,23 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    {doc.structured_data.report_date && (
+                    {(doc.structured_data.report_date || editingDoc === doc.id) && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Report Date:</span>
-                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {doc.structured_data.report_date}
-                        </p>
+                        {editingDoc === doc.id ? (
+                          <input
+                            type="text"
+                            value={editedData.report_date || ''}
+                            onChange={(e) => updateField('report_date', e.target.value)}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
+                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          />
+                        ) : (
+                          <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {doc.structured_data.report_date}
+                          </p>
+                        )}
                       </div>
                     )}
                     {doc.structured_data.dates?.report_date && (
@@ -312,20 +419,42 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    {doc.structured_data.lab_name && (
+                    {(doc.structured_data.lab_name || editingDoc === doc.id) && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Lab:</span>
-                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {doc.structured_data.lab_name}
-                        </p>
+                        {editingDoc === doc.id ? (
+                          <input
+                            type="text"
+                            value={editedData.lab_name || ''}
+                            onChange={(e) => updateField('lab_name', e.target.value)}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
+                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          />
+                        ) : (
+                          <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {doc.structured_data.lab_name}
+                          </p>
+                        )}
                       </div>
                     )}
-                    {doc.structured_data.doctor_name && (
+                    {(doc.structured_data.doctor_name || editingDoc === doc.id) && (
                       <div>
                         <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Doctor:</span>
-                        <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {doc.structured_data.doctor_name}
-                        </p>
+                        {editingDoc === doc.id ? (
+                          <input
+                            type="text"
+                            value={editedData.doctor_name || ''}
+                            onChange={(e) => updateField('doctor_name', e.target.value)}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
+                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          />
+                        ) : (
+                          <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {doc.structured_data.doctor_name}
+                          </p>
+                        )}
                       </div>
                     )}
                     {doc.structured_data.doctor_info?.name && (
@@ -367,21 +496,70 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {(doc.structured_data.key_metrics || doc.structured_data.test_results || []).map((test: any, idx: number) => (
+                        {((editingDoc === doc.id ? editedData.key_metrics : doc.structured_data.key_metrics) || doc.structured_data.test_results || []).map((test: any, idx: number) => (
                           <tr key={idx} className={`border-b ${darkMode ? 'border-gray-800' : 'border-gray-100'}`}>
                             <td className={`py-2 px-2 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {test.test_name}
+                              {editingDoc === doc.id ? (
+                                <input
+                                  type="text"
+                                  value={test.test_name || ''}
+                                  onChange={(e) => updateMetric(idx, 'test_name', e.target.value)}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              ) : test.test_name}
                             </td>
                             <td className={`py-2 px-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {test.value} {test.unit || ''}
+                              {editingDoc === doc.id ? (
+                                <div className="flex space-x-1">
+                                  <input
+                                    type="text"
+                                    value={test.value || ''}
+                                    onChange={(e) => updateMetric(idx, 'value', e.target.value)}
+                                    className={`w-16 px-2 py-1 text-sm rounded border ${
+                                      darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                    }`}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={test.unit || ''}
+                                    onChange={(e) => updateMetric(idx, 'unit', e.target.value)}
+                                    placeholder="unit"
+                                    className={`w-16 px-2 py-1 text-sm rounded border ${
+                                      darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                    }`}
+                                  />
+                                </div>
+                              ) : `${test.value} ${test.unit || ''}`}
                             </td>
                             <td className={`py-2 px-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {test.reference_range || 'N/A'}
+                              {editingDoc === doc.id ? (
+                                <input
+                                  type="text"
+                                  value={test.reference_range || ''}
+                                  onChange={(e) => updateMetric(idx, 'reference_range', e.target.value)}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              ) : (test.reference_range || 'N/A')}
                             </td>
                             <td className={`py-2 px-2`}>
-                              <span className={`text-xs font-semibold uppercase ${getStatusColor(test.interpretation || test.status)}`}>
-                                {test.interpretation || test.status || 'N/A'}
-                              </span>
+                              {editingDoc === doc.id ? (
+                                <input
+                                  type="text"
+                                  value={test.interpretation || test.status || ''}
+                                  onChange={(e) => updateMetric(idx, 'interpretation', e.target.value)}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              ) : (
+                                <span className={`text-xs font-semibold uppercase ${getStatusColor(test.interpretation || test.status)}`}>
+                                  {test.interpretation || test.status || 'N/A'}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -397,7 +575,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
 
       <div className={`p-4 rounded-lg ${darkMode ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
         <p className={`text-sm ${darkMode ? 'text-blue-400' : 'text-blue-800'}`}>
-          <strong>Note:</strong> Please verify the extracted information is correct. You can edit or update details after AI processing.
+          <strong>Note:</strong> Please verify the extracted information is correct. Click the "Edit" button to modify any field, then save your changes.
         </p>
       </div>
 
