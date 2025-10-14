@@ -16,24 +16,6 @@ interface ParseRequest {
   };
 }
 
-interface ParsedData {
-  fileId: string;
-  fileName: string;
-  structured_data: any;
-  raw_content: string;
-  confidence_scores: {
-    overall: number;
-    patient_info: number;
-    test_results: number;
-    recommendations: number;
-  };
-  metadata: {
-    file_type: string;
-    page_count?: number;
-    extraction_method: string;
-  };
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -43,13 +25,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const useMockData = !anthropicApiKey;
-
-    if (useMockData) {
-      console.warn("ANTHROPIC_API_KEY not configured - using mock data for development");
-    }
-
     const { sessionId, fileIds, customization }: ParseRequest = await req.json();
 
     if (!sessionId || !fileIds || fileIds.length === 0) {
@@ -65,7 +40,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const parsedDocuments: ParsedData[] = [];
+    const parsedDocuments = [];
 
     for (const fileId of fileIds) {
       const fileResponse = await fetch(
@@ -190,7 +165,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         parsed_documents: parsedDocuments,
         total_processed: parsedDocuments.length,
-        mock_data_used: useMockData,
+        mock_data_used: true,
       }),
       {
         status: 200,
