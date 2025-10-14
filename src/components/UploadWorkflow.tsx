@@ -186,14 +186,19 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     }
 
     try {
-      console.log('Fetching parsed documents for session:', sessionId, 'user:', user.id);
+      console.log('=== PDF Download Started ===');
+      console.log('Session ID:', sessionId);
+      console.log('User ID:', user.id);
 
       const { data: parsedDocs, error } = await supabase
         .from('parsed_documents')
         .select('*')
         .eq('session_id', sessionId);
 
-      console.log('Parsed docs response:', { data: parsedDocs, error });
+      console.log('Query result:', {
+        found: parsedDocs?.length || 0,
+        error: error?.message || 'none'
+      });
 
       if (error) {
         console.error('Supabase error:', error);
@@ -206,7 +211,17 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         return;
       }
 
-      console.log('Generating PDF for', parsedDocs.length, 'documents');
+      console.log('Documents to process:', parsedDocs.length);
+      parsedDocs.forEach((doc, idx) => {
+        console.log(`Document ${idx + 1}:`, {
+          id: doc.id,
+          file_id: doc.file_id,
+          status: doc.parsing_status,
+          has_structured_data: !!doc.structured_data,
+          structured_data_keys: doc.structured_data ? Object.keys(doc.structured_data) : []
+        });
+      });
+
       generatePDFReport(parsedDocs);
     } catch (error: any) {
       console.error('Error downloading report:', error);
@@ -216,6 +231,9 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const generatePDFReport = (parsedDocs: any[]) => {
     try {
+      console.log('=== Generating PDF ===');
+      console.log('Documents received:', parsedDocs.length);
+
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         alert('Please allow pop-ups to download the report');
@@ -368,17 +386,33 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             const data = doc.structured_data || {};
             const safeValue = (value: any) => value ? String(value).replace(/[<>]/g, '') : '';
 
-            const profileName = data.profile_name || data.patient_info?.name || '';
-            const reportDate = data.report_date || data.dates?.report_date || '';
-            const labName = data.lab_name || '';
-            const doctorName = data.doctor_name || data.doctor_info?.name || '';
+            const profileName = data.profile_name || data.patient_info?.name || data.patient_name || '';
+            const reportDate = data.report_date || data.dates?.report_date || data.test_date || '';
+            const labName = data.lab_name || data.laboratory || '';
+            const doctorName = data.doctor_name || data.doctor_info?.name || data.physician || '';
             const metrics = data.key_metrics || data.test_results || [];
+
+            const hasAnyData = profileName || reportDate || labName || doctorName ||
+                               (metrics && metrics.length > 0) ||
+                               (data.diagnoses && data.diagnoses.length > 0) ||
+                               (data.medications && data.medications.length > 0) ||
+                               (data.recommendations && data.recommendations.length > 0) ||
+                               data.summary;
 
             return `
               ${index > 0 ? '<div style="page-break-before: always;"></div>' : ''}
 
               <div class="section">
                 <h2 class="section-title">Medical Report ${index + 1}</h2>
+
+                ${!hasAnyData ? `
+                  <div class="info-grid">
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                      <div class="info-label">Status</div>
+                      <div class="info-value">Document is being processed. Data extraction is in progress.</div>
+                    </div>
+                  </div>
+                ` : ''}
 
                 ${(profileName || data.patient_info) ? `
                   <div class="section">
@@ -577,7 +611,28 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setCurrentStep(1);
   };
 
-  const handleCustomizeContinue = () => {
+  const handleCustomizeContinue = async () => {
+    if (!sessionId) {
+      setShowDataPreview(true);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          tone,
+          language_level: languageLevel,
+        })
+        .eq('id', sessionId);
+
+      if (error) {
+        console.error('Failed to update session customization:', error);
+      }
+    } catch (error) {
+      console.error('Error updating customization:', error);
+    }
+
     setShowDataPreview(true);
   };
 
