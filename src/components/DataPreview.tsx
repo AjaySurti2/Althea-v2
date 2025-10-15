@@ -4,15 +4,12 @@ import {
   AlertTriangle,
   Activity,
   User,
-  Calendar,
   FileText,
   Stethoscope,
   Pill,
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  ThumbsUp,
-  ThumbsDown,
   Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, TrendingUp, Users, Calendar, Download, Settings, AlertCircle } from 'lucide-react';
+import { Upload, FileText, TrendingUp, Users, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Session, HealthMetric, FamilyPattern, Reminder } from '../lib/supabase';
 import { TotalReports } from './TotalReports';
@@ -298,7 +298,7 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
   );
 };
 
-const HistoryTab: React.FC<{ darkMode: boolean; sessions: Session[]; metrics: HealthMetric[] }> = ({ darkMode, sessions, metrics }) => {
+const HistoryTab: React.FC<{ darkMode: boolean; sessions: Session[]; metrics: HealthMetric[] }> = ({ darkMode, sessions }) => {
   return (
     <div className="space-y-6">
       <h3 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>

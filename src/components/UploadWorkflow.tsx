@@ -25,7 +25,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [languageLevel, setLanguageLevel] = useState<'simple' | 'moderate' | 'technical'>('simple');
   const [processing, setProcessing] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [uploadComplete, setUploadComplete] = useState(false);
+  const [, setUploadComplete] = useState(false);
   const MAX_FILES = 5;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -491,7 +491,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         </tr>
                       </thead>
                       <tbody>
-                        ${metrics.map(test => `
+                        ${metrics.map((test: any) => `
                           <tr>
                             <td>${safeValue(test.test_name)}</td>
                             <td>${safeValue(test.value)}${test.unit ? ' ' + safeValue(test.unit) : ''}</td>
@@ -508,7 +508,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div class="section">
                     <h3 class="section-title">Diagnoses</h3>
                     <ul class="recommendations">
-                      ${data.diagnoses.map(diagnosis => `<li>${diagnosis}</li>`).join('')}
+                      ${data.diagnoses.map((diagnosis: any) => `<li>${diagnosis}</li>`).join('')}
                     </ul>
                   </div>
                 ` : ''}
@@ -517,7 +517,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div class="section">
                     <h3 class="section-title">Medications</h3>
                     <ul class="recommendations">
-                      ${data.medications.map(med => `<li>${med}</li>`).join('')}
+                      ${data.medications.map((med: any) => `<li>${med}</li>`).join('')}
                     </ul>
                   </div>
                 ` : ''}
@@ -526,7 +526,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div class="section">
                     <h3 class="section-title">Recommendations</h3>
                     <ul class="recommendations">
-                      ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                      ${data.recommendations.map((rec: any) => `<li>${rec}</li>`).join('')}
                     </ul>
                   </div>
                 ` : ''}

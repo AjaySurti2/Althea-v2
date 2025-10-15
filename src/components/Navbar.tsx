@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Moon, Sun, Menu, X, User, ChevronDown, LogOut, Activity } from 'lucide-react';
+import { Moon, Sun, Menu, X, User, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NavbarProps {
@@ -10,7 +10,7 @@ interface NavbarProps {
   onProfileClick?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuthClick, onLeadClick, onProfileClick }) => {
+export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuthClick, onProfileClick }) => {
   const { user, profile, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
