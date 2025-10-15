@@ -77,23 +77,38 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 ---
 
-## Step 3: Restart Your Development Server
+## Step 3: Verify Environment Variables
 
-After updating `.env`, restart the development server to load new variables:
+Before starting the dev server, verify your environment is configured correctly:
 
 ```bash
-# Stop the current server (Ctrl+C)
+npm run verify-env
+```
+
+If you see all green checkmarks (✅), you're good to go!
+
+---
+
+## Step 4: Restart Your Development Server
+
+After updating `.env`, **you MUST restart** the development server:
+
+```bash
+# Stop the current server (Ctrl+C or kill the process)
 # Then restart
 npm run dev
 ```
 
-**Why?** Vite loads environment variables at startup. Changes require a restart.
+**CRITICAL:** Vite loads environment variables at startup only. If you change `.env`, you must:
+1. Stop the dev server completely
+2. Start it again
+3. Hard refresh your browser (Ctrl+Shift+R or Cmd+Shift+R)
 
 ---
 
-## Step 4: Test Your Connection
+## Step 5: Test Your Connection
 
-### 4.1 Simple Connection Test
+### 5.1 Simple Connection Test
 
 Create a test file `src/utils/testConnection.ts`:
 
@@ -132,7 +147,7 @@ export async function testSupabaseConnection() {
 }
 ```
 
-### 4.2 Run the Test in Your Component
+### 5.2 Run the Test in Your Component
 
 Add this to any component (e.g., `Dashboard.tsx`):
 
@@ -152,7 +167,7 @@ useEffect(() => {
 }, []);
 ```
 
-### 4.3 Quick Console Test
+### 5.3 Quick Console Test
 
 Open your browser console and run:
 
@@ -168,7 +183,7 @@ supabase.from('profiles').select('count').then(console.log);
 
 ---
 
-## Step 5: Troubleshooting Common Issues
+## Step 6: Troubleshooting Common Issues
 
 ### Issue 1: "Missing Supabase environment variables"
 
