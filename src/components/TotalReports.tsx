@@ -8,7 +8,13 @@ import {
   Calendar,
   Filter,
   Search,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -25,6 +31,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'file' | 'session'; id: string } | null>(null);
+  const [viewingReport, setViewingReport] = useState<string | null>(null);
 
   useEffect(() => {
     loadSessions();
@@ -52,11 +59,24 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
       if (filesError) throw filesError;
 
-      // Group files by session
+      // Load parsed documents
+      const { data: parsedData, error: parsedError } = await supabase
+        .from('parsed_documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('parsing_status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (parsedError) throw parsedError;
+
+      // Group files and parsed data by session
       const processedSessions = sessionsData?.map(session => ({
         ...session,
         files: filesData?.filter((f: any) =>
           f.session_id === session.id
+        ) || [],
+        parsedReports: parsedData?.filter((p: any) =>
+          p.session_id === session.id
         ) || []
       })) || [];
 
@@ -307,22 +327,50 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                       </button>
 
                       <div>
-                        <h3 className={`text-lg font-semibold ${
-                          darkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {session.profile_name || 'Health Report Session'}
-                        </h3>
-                        <div className={`flex items-center space-x-3 mt-1 text-sm ${
+                        <div className="flex items-center space-x-3">
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                            darkMode ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700'
+                          }`}>
+                            #{filteredSessions.indexOf(session) + 1}
+                          </span>
+                          <h3 className={`text-lg font-semibold ${
+                            darkMode ? 'text-white' : 'text-gray-900'
+                          }`}>
+                            {session.parsedReports?.[0]?.structured_data?.profile_name || 'Health Report Session'}
+                          </h3>
+                        </div>
+                        <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm ${
                           darkMode ? 'text-gray-400' : 'text-gray-600'
                         }`}>
                           <span className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1" />
-                            {new Date(session.created_at).toLocaleDateString()}
+                            {new Date(session.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center">
+                            <Clock className="w-4 h-4 mr-1" />
+                            {new Date(session.created_at).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </span>
                           <span>•</span>
                           <span>
                             {session.files.length} {session.files.length === 1 ? 'document' : 'documents'}
                           </span>
+                          {session.parsedReports && session.parsedReports.length > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="flex items-center">
+                                <Activity className="w-4 h-4 mr-1" />
+                                {session.parsedReports.length} parsed
+                              </span>
+                            </>
+                          )}
                           <span>•</span>
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                             session.status === 'completed'
@@ -372,84 +420,311 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                 </div>
               </div>
 
-              {/* Expanded Documents */}
+              {/* Expanded Documents and Parsed Data */}
               {expandedSessions.has(session.id) && (
-                <div className={`border-t px-4 py-3 space-y-2 ${
+                <div className={`border-t ${
                   darkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
                 }`}>
-                  {session.files.length === 0 ? (
-                    <div className="text-center py-4">
-                      <AlertCircle className={`w-8 h-8 mx-auto mb-2 ${
-                        darkMode ? 'text-gray-600' : 'text-gray-400'
-                      }`} />
-                      <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-                        No documents in this session
-                      </p>
-                    </div>
-                  ) : (
-                    session.files.map((file: any) => (
-                      <div
-                        key={file.id}
-                        className={`flex items-center justify-between p-3 rounded-lg ${
-                          darkMode ? 'bg-gray-800' : 'bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-3 flex-1 min-w-0">
-                          <FileText className="w-5 h-5 text-green-500 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${
-                              darkMode ? 'text-white' : 'text-gray-900'
-                            }`}>
-                              {file.file_name}
-                            </p>
-                            <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-                              {(file.file_size / 1024 / 1024).toFixed(2)} MB
-                            </p>
+                  {/* Files Section */}
+                  <div className="px-4 py-3 space-y-2">
+                    <h4 className={`text-sm font-semibold mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Uploaded Documents
+                    </h4>
+                    {session.files.length === 0 ? (
+                      <div className="text-center py-4">
+                        <AlertCircle className={`w-8 h-8 mx-auto mb-2 ${
+                          darkMode ? 'text-gray-600' : 'text-gray-400'
+                        }`} />
+                        <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+                          No documents in this session
+                        </p>
+                      </div>
+                    ) : (
+                      session.files.map((file: any) => (
+                        <div
+                          key={file.id}
+                          className={`flex items-center justify-between p-3 rounded-lg ${
+                            darkMode ? 'bg-gray-800' : 'bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3 flex-1 min-w-0">
+                            <FileText className="w-5 h-5 text-green-500 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-medium truncate ${
+                                darkMode ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {file.file_name}
+                              </p>
+                              <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+                                {(file.file_size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            {/* Download Button */}
+                            <button
+                              onClick={() => handleDownloadFile(file.storage_path, file.file_name)}
+                              className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors`}
+                              title="Download"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Button */}
+                            {deleteConfirm?.type === 'file' && deleteConfirm.id === file.id ? (
+                              <div className="flex items-center space-x-1">
+                                <button
+                                  onClick={() => handleDeleteFile(file.id, file.storage_path)}
+                                  className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(null)}
+                                  className={`px-2 py-1 text-xs rounded ${
+                                    darkMode
+                                      ? 'bg-gray-700 text-gray-300'
+                                      : 'bg-gray-200 text-gray-700'
+                                  }`}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirm({ type: 'file', id: file.id })}
+                                className="p-2 rounded text-red-500 hover:bg-red-500/20 transition-colors"
+                                title="Delete file"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
+                      ))
+                    )}
+                  </div>
 
-                        <div className="flex items-center space-x-2">
-                          {/* Download Button */}
-                          <button
-                            onClick={() => handleDownloadFile(file.storage_path, file.file_name)}
-                            className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors`}
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
+                  {/* Parsed Data Section */}
+                  {session.parsedReports && session.parsedReports.length > 0 && (
+                    <div className={`px-4 py-3 border-t ${
+                      darkMode ? 'border-gray-700' : 'border-gray-200'
+                    }`}>
+                      <h4 className={`text-sm font-semibold mb-3 ${
+                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Parsed Medical Data
+                      </h4>
+                      <div className="space-y-3">
+                        {session.parsedReports.map((report: any, idx: number) => {
+                          const data = report.structured_data;
+                          const isExpanded = viewingReport === report.id;
 
-                          {/* Delete Button */}
-                          {deleteConfirm?.type === 'file' && deleteConfirm.id === file.id ? (
-                            <div className="flex items-center space-x-1">
-                              <button
-                                onClick={() => handleDeleteFile(file.id, file.storage_path)}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className={`px-2 py-1 text-xs rounded ${
-                                  darkMode
-                                    ? 'bg-gray-700 text-gray-300'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirm({ type: 'file', id: file.id })}
-                              className="p-2 rounded text-red-500 hover:bg-red-500/20 transition-colors"
-                              title="Delete file"
+                          return (
+                            <div
+                              key={report.id}
+                              className={`rounded-lg border ${
+                                darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                              }`}
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+                              {/* Report Header */}
+                              <div className="p-4">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                      <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                        darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                                      }`}>
+                                        Report {idx + 1}
+                                      </span>
+                                      <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+                                        {data?.lab_name || 'Lab Report'}
+                                      </span>
+                                    </div>
+                                    <p className={`font-medium ${
+                                      darkMode ? 'text-white' : 'text-gray-900'
+                                    }`}>
+                                      {data?.profile_name || data?.patient_info?.name || 'Patient Report'}
+                                    </p>
+                                    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs ${
+                                      darkMode ? 'text-gray-400' : 'text-gray-600'
+                                    }`}>
+                                      {data?.report_date && (
+                                        <span>Report Date: {data.report_date}</span>
+                                      )}
+                                      {data?.doctor_name && (
+                                        <><span>•</span><span>By: {data.doctor_name}</span></>
+                                      )}
+                                      {data?.key_metrics && (
+                                        <><span>•</span><span>{data.key_metrics.length} tests</span></>
+                                      )}
+                                      {data?.abnormal_findings && data.abnormal_findings.length > 0 && (
+                                        <><span>•</span>
+                                        <span className="text-amber-600 dark:text-amber-400 font-medium">
+                                          {data.abnormal_findings.length} abnormal
+                                        </span></>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => setViewingReport(isExpanded ? null : report.id)}
+                                    className={`ml-3 p-2 rounded-lg transition-colors ${
+                                      darkMode
+                                        ? 'hover:bg-gray-700 text-gray-400'
+                                        : 'hover:bg-gray-100 text-gray-600'
+                                    }`}
+                                    title={isExpanded ? 'Hide details' : 'View details'}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expanded Report Details */}
+                              {isExpanded && data && (
+                                <div className={`border-t px-4 py-3 space-y-4 ${
+                                  darkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                                }`}>
+                                  {/* Patient Info */}
+                                  {data.patient_info && (
+                                    <div>
+                                      <h5 className={`text-xs font-semibold mb-2 ${
+                                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        Patient Information
+                                      </h5>
+                                      <div className={`grid grid-cols-2 gap-2 text-sm ${
+                                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>
+                                        {data.patient_info.age && <div><span className="font-medium">Age:</span> {data.patient_info.age}</div>}
+                                        {data.patient_info.gender && <div><span className="font-medium">Gender:</span> {data.patient_info.gender}</div>}
+                                        {data.patient_info.contact && <div className="col-span-2"><span className="font-medium">Contact:</span> {data.patient_info.contact}</div>}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Key Metrics */}
+                                  {data.key_metrics && data.key_metrics.length > 0 && (
+                                    <div>
+                                      <h5 className={`text-xs font-semibold mb-2 ${
+                                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        Test Results ({data.key_metrics.length})
+                                      </h5>
+                                      <div className="max-h-64 overflow-y-auto space-y-2">
+                                        {data.key_metrics.map((metric: any, midx: number) => (
+                                          <div
+                                            key={midx}
+                                            className={`flex items-center justify-between p-2 rounded text-sm ${
+                                              darkMode ? 'bg-gray-800' : 'bg-white'
+                                            }`}
+                                          >
+                                            <div className="flex-1">
+                                              <p className={`font-medium ${
+                                                darkMode ? 'text-white' : 'text-gray-900'
+                                              }`}>
+                                                {metric.test || metric.test_name}
+                                              </p>
+                                              <p className={`text-xs ${
+                                                darkMode ? 'text-gray-500' : 'text-gray-600'
+                                              }`}>
+                                                Range: {metric.range || metric.reference_range}
+                                              </p>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                              <span className={`font-semibold ${
+                                                darkMode ? 'text-gray-300' : 'text-gray-700'
+                                              }`}>
+                                                {metric.value} {metric.unit}
+                                              </span>
+                                              {metric.status === 'HIGH' || metric.interpretation === 'High' ? (
+                                                <span className="flex items-center text-red-600 dark:text-red-400">
+                                                  <TrendingUp className="w-4 h-4 mr-1" />
+                                                  HIGH
+                                                </span>
+                                              ) : metric.status === 'LOW' || metric.interpretation === 'Low' ? (
+                                                <span className="flex items-center text-blue-600 dark:text-blue-400">
+                                                  <TrendingDown className="w-4 h-4 mr-1" />
+                                                  LOW
+                                                </span>
+                                              ) : (
+                                                <span className="flex items-center text-green-600 dark:text-green-400">
+                                                  <Minus className="w-4 h-4 mr-1" />
+                                                  NORMAL
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Summary */}
+                                  {data.summary && (
+                                    <div>
+                                      <h5 className={`text-xs font-semibold mb-2 ${
+                                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        Clinical Summary
+                                      </h5>
+                                      <p className={`text-sm ${
+                                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>
+                                        {data.summary}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Abnormal Findings */}
+                                  {data.abnormal_findings && data.abnormal_findings.length > 0 && (
+                                    <div>
+                                      <h5 className={`text-xs font-semibold mb-2 text-amber-600 dark:text-amber-400`}>
+                                        Abnormal Findings ({data.abnormal_findings.length})
+                                      </h5>
+                                      <ul className={`space-y-1 text-sm ${
+                                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>
+                                        {data.abnormal_findings.map((finding: string, fidx: number) => (
+                                          <li key={fidx} className="flex items-start">
+                                            <span className="text-amber-500 mr-2">•</span>
+                                            <span>{finding}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {/* Recommendations */}
+                                  {data.recommendations && data.recommendations.length > 0 && (
+                                    <div>
+                                      <h5 className={`text-xs font-semibold mb-2 ${
+                                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        Recommendations
+                                      </h5>
+                                      <ul className={`space-y-1 text-sm ${
+                                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>
+                                        {data.recommendations.map((rec: string, ridx: number) => (
+                                          <li key={ridx} className="flex items-start">
+                                            <span className="text-green-500 mr-2">✓</span>
+                                            <span>{rec}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))
+                    </div>
                   )}
                 </div>
               )}
