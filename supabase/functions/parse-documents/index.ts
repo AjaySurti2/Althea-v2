@@ -17,44 +17,60 @@ interface ParseRequest {
   };
 }
 
-const MEDICAL_PARSING_PROMPT = `You are a medical data interpretation assistant specialized in extracting and structuring information from medical reports. Your task is to parse uploaded medical report text and convert it into a standardized JSON format for clinical review.
+const MEDICAL_PARSING_PROMPT = `You are an expert medical data extraction AI specialized in parsing lab reports, prescriptions, and medical documents. Your task is to extract ALL structured information with clinical accuracy.
 
-**INSTRUCTIONS:**
-1. Carefully read and analyze the entire medical report text provided below
-2. Extract only factual information that is explicitly stated in the document
-3. Do not infer, assume, or generate any data that is not clearly present in the text
-4. If information for any field is not found in the document, leave that field empty ("")
-5. Maintain accuracy and preserve original medical terminology where appropriate
+**EXTRACTION RULES:**
+1. Extract EVERY piece of data found in the document - do not skip any test results
+2. Use EXACT values and units as written in the document
+3. For each test, determine status by comparing value against reference range:
+   - "NORMAL" if value is within range
+   - "HIGH" if value exceeds upper limit
+   - "LOW" if value is below lower limit
+   - "ABNORMAL" if flagged but no range provided
+4. If information is missing, leave field empty ("") - DO NOT use placeholder values
+5. Preserve medical terminology exactly as written
 
-**REQUIRED OUTPUT FORMAT:**
-Return your analysis as a valid JSON object with the following exact structure:
-
+**OUTPUT FORMAT (JSON only, no other text):**
 {
-  "profile_name": "",
-  "report_date": "",
-  "lab_name": "",
-  "doctor_name": "",
-  "key_metrics": [
+  "patient": {
+    "name": "",
+    "age": "",
+    "gender": "",
+    "contact": "",
+    "address": ""
+  },
+  "lab_details": {
+    "lab_name": "",
+    "doctor": "",
+    "report_date": "",
+    "test_date": "",
+    "report_id": ""
+  },
+  "metrics": [
     {
-      "test_name": "",
+      "test": "",
       "value": "",
       "unit": "",
-      "reference_range": "",
-      "interpretation": ""
+      "range": "",
+      "status": ""
     }
   ],
+  "medications": [],
+  "diagnoses": [],
+  "recommendations": [],
   "summary": ""
 }
 
-**FIELD SPECIFICATIONS:**
-- profile_name: Patient's full name or patient ID as written in the report
-- report_date: Date when the test was conducted or report was generated (format as found in document)
-- lab_name: Name of the laboratory, hospital, or medical facility
-- doctor_name: Name of the ordering physician, consultant, or reviewing doctor
-- key_metrics: Array of all test results found in the report
-- summary: Concise 2-3 sentence summary in plain English explaining the overall findings
+**EXAMPLES OF STATUS DETERMINATION:**
+- Hemoglobin 11.9 g/dL (Range: 12-16) → status: "LOW"
+- WBC 11600 cells/cu.mm (Range: 4300-10300) → status: "HIGH"
+- Calcium 9.1 mg/dL (Range: 8.8-10.2) → status: "NORMAL"
 
-**CRITICAL:** Return ONLY the JSON object, no additional text or explanation.`;
+**CRITICAL INSTRUCTIONS:**
+- Return ONLY valid JSON, no markdown, no explanations
+- Extract ALL tests - missing tests is a critical error
+- Compare every value to its range and determine correct status
+- Use empty string "" for missing data, NEVER use placeholder text`;
 
 function generateMockData(fileName: string): any {
   return {
@@ -228,14 +244,24 @@ async function parseWithAI(documentText: string, fileName: string): Promise<any>
     const result = await response.json();
     const content = result.content[0].text;
 
+    console.log("=== Claude API Raw Response ===");
+    console.log("Content length:", content.length);
+    console.log("First 500 chars:", content.substring(0, 500));
+
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error("Failed to extract JSON from AI response");
+      console.error("Raw content:", content);
       return generateMockData(fileName);
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+    console.log("=== Parsed Data Structure ===");
+    console.log("Patient name:", parsed.patient?.name || parsed.profile_name);
+    console.log("Lab:", parsed.lab_details?.lab_name || parsed.lab_name);
+    console.log("Metrics count:", (parsed.metrics || parsed.key_metrics || []).length);
     console.log("AI parsing successful");
+
     return parsed;
   } catch (error) {
     console.error("AI parsing error:", error);
@@ -326,12 +352,27 @@ Deno.serve(async (req: Request) => {
         console.log(`Parsing document (method: ${extractionMethod})...`);
         const aiParsedData = await parseWithAI(documentText, fileData.file_name);
 
+        // Support both old and new format
         const structured_data = {
-          profile_name: aiParsedData.profile_name || "",
-          report_date: aiParsedData.report_date || "",
-          lab_name: aiParsedData.lab_name || "",
-          doctor_name: aiParsedData.doctor_name || "",
-          key_metrics: aiParsedData.key_metrics || [],
+          profile_name: aiParsedData.patient?.name || aiParsedData.profile_name || "",
+          patient_info: aiParsedData.patient || {
+            name: aiParsedData.profile_name || "",
+            age: aiParsedData.patient?.age || "",
+            gender: aiParsedData.patient?.gender || "",
+            contact: aiParsedData.patient?.contact || "",
+            address: aiParsedData.patient?.address || ""
+          },
+          report_date: aiParsedData.lab_details?.report_date || aiParsedData.report_date || "",
+          lab_name: aiParsedData.lab_details?.lab_name || aiParsedData.lab_name || "",
+          doctor_name: aiParsedData.lab_details?.doctor || aiParsedData.doctor_name || "",
+          dates: {
+            report_date: aiParsedData.lab_details?.report_date || aiParsedData.report_date || "",
+            test_date: aiParsedData.lab_details?.test_date || ""
+          },
+          key_metrics: aiParsedData.metrics || aiParsedData.key_metrics || [],
+          medications: aiParsedData.medications || [],
+          diagnoses: aiParsedData.diagnoses || [],
+          recommendations: aiParsedData.recommendations || [],
           summary: aiParsedData.summary || "",
         };
 
@@ -388,7 +429,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`\n=== Processing Complete ===`);
+    console.log("\n=== Processing Complete ===");
     console.log(`Success: ${parsedDocuments.length}, Errors: ${errors.length}`);
 
     return new Response(
