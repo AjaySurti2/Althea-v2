@@ -106,12 +106,61 @@ function generateMockData(fileName: string): any {
 }
 
 async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
+  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+
+  if (!anthropicApiKey) {
+    console.log("ANTHROPIC_API_KEY not available, cannot extract PDF text");
+    return "";
+  }
+
   try {
-    console.log("Attempting PDF extraction...");
-    const pdfLib = await import("npm:pdf-parse@1.1.1");
-    const data = await pdfLib.default(Buffer.from(arrayBuffer));
-    console.log(`PDF extraction successful: ${data.text?.length || 0} characters`);
-    return data.text || "";
+    console.log("Extracting PDF text using Claude Vision API...");
+
+    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicApiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: base64Pdf,
+                },
+              },
+              {
+                type: "text",
+                text: "Please extract ALL text from this PDF document. Return only the raw text content, preserving the layout and structure as much as possible. Include all information: patient details, lab results, test values, reference ranges, and interpretations exactly as they appear.",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Claude Vision API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error("Error details:", errorText);
+      return "";
+    }
+
+    const result = await response.json();
+    const extractedText = result.content[0].text || "";
+    console.log(`PDF extraction successful: ${extractedText.length} characters`);
+    return extractedText;
   } catch (error) {
     console.error("PDF extraction error:", error);
     return "";
