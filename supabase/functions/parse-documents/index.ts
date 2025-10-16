@@ -205,15 +205,26 @@ async function extractTextFromFile(
 async function parseWithAI(documentText: string, fileName: string): Promise<any> {
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
 
+  console.log("=== PARSING DIAGNOSTICS ===");
+  console.log("API Key Status:", anthropicApiKey ? `Configured (${anthropicApiKey.substring(0, 15)}...)` : "NOT CONFIGURED");
+  console.log("Document Text Length:", documentText?.length || 0);
+  console.log("File Name:", fileName);
+
   if (!anthropicApiKey) {
-    console.log("ANTHROPIC_API_KEY not available, using mock data");
+    console.error("❌ CRITICAL: ANTHROPIC_API_KEY not available in edge function environment");
+    console.error("Please ensure the API key is set in Supabase Edge Function secrets");
     return generateMockData(fileName);
   }
 
   if (!documentText || documentText.length < 50) {
-    console.log("Insufficient text for AI parsing, using mock data");
+    console.error("❌ CRITICAL: Insufficient text extracted from document");
+    console.error("Text length:", documentText?.length || 0);
+    console.error("First 200 chars:", documentText?.substring(0, 200) || "EMPTY");
     return generateMockData(fileName);
   }
+
+  console.log("✅ Pre-conditions met for AI parsing");
+  console.log("Extracted text preview:", documentText.substring(0, 300));
 
   try {
     console.log("Parsing with Claude AI...");
@@ -245,26 +256,42 @@ async function parseWithAI(documentText: string, fileName: string): Promise<any>
     const content = result.content[0].text;
 
     console.log("=== Claude API Raw Response ===");
-    console.log("Content length:", content.length);
-    console.log("First 500 chars:", content.substring(0, 500));
+    console.log("Response Status:", response.status);
+    console.log("Content Type:", typeof content);
+    console.log("Content Length:", content.length);
+    console.log("First 800 chars:", content.substring(0, 800));
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error("Failed to extract JSON from AI response");
-      console.error("Raw content:", content);
+      console.error("❌ Failed to extract JSON from AI response");
+      console.error("Full raw content:", content);
       return generateMockData(fileName);
     }
 
+    console.log("✅ JSON extracted, length:", jsonMatch[0].length);
     const parsed = JSON.parse(jsonMatch[0]);
+
     console.log("=== Parsed Data Structure ===");
+    console.log("Full parsed object:", JSON.stringify(parsed, null, 2));
     console.log("Patient name:", parsed.patient?.name || parsed.profile_name);
-    console.log("Lab:", parsed.lab_details?.lab_name || parsed.lab_name);
+    console.log("Patient age:", parsed.patient?.age);
+    console.log("Patient gender:", parsed.patient?.gender);
+    console.log("Lab name:", parsed.lab_details?.lab_name || parsed.lab_name);
+    console.log("Doctor:", parsed.lab_details?.doctor || parsed.doctor_name);
+    console.log("Report date:", parsed.lab_details?.report_date || parsed.report_date);
     console.log("Metrics count:", (parsed.metrics || parsed.key_metrics || []).length);
-    console.log("AI parsing successful");
+
+    if (parsed.metrics && parsed.metrics.length > 0) {
+      console.log("First 3 metrics:", parsed.metrics.slice(0, 3));
+    }
+
+    console.log("✅ AI parsing successful with REAL data");
 
     return parsed;
   } catch (error) {
-    console.error("AI parsing error:", error);
+    console.error("❌ AI parsing error:", error);
+    console.error("Error details:", error instanceof Error ? error.message : String(error));
+    console.error("Stack trace:", error instanceof Error ? error.stack : "No stack trace");
     return generateMockData(fileName);
   }
 }
@@ -349,8 +376,14 @@ Deno.serve(async (req: Request) => {
           console.error("Download/extraction error:", downloadError);
         }
 
-        console.log(`Parsing document (method: ${extractionMethod})...`);
+        console.log(`\n=== PARSING DOCUMENT ===`);
+        console.log(`Extraction method: ${extractionMethod}`);
+        console.log(`Text length for parsing: ${documentText.length}`);
+
         const aiParsedData = await parseWithAI(documentText, fileData.file_name);
+
+        console.log(`\n=== AI PARSED DATA RECEIVED ===`);
+        console.log(`Raw aiParsedData:`, JSON.stringify(aiParsedData, null, 2));
 
         // Support both old and new format
         const structured_data = {
@@ -376,6 +409,14 @@ Deno.serve(async (req: Request) => {
           summary: aiParsedData.summary || "",
         };
 
+        console.log(`\n=== STRUCTURED DATA FOR DATABASE ===`);
+        console.log(`Profile Name: ${structured_data.profile_name}`);
+        console.log(`Lab Name: ${structured_data.lab_name}`);
+        console.log(`Doctor Name: ${structured_data.doctor_name}`);
+        console.log(`Report Date: ${structured_data.report_date}`);
+        console.log(`Key Metrics Count: ${structured_data.key_metrics.length}`);
+        console.log(`Full structured_data:`, JSON.stringify(structured_data, null, 2));
+
         const confidence = {
           overall: extractionMethod === "extracted" ? 0.92 : 0.50,
           extraction: extractionMethod === "extracted" ? 0.90 : 0.30,
@@ -396,7 +437,8 @@ Deno.serve(async (req: Request) => {
           },
         });
 
-        await supabase.from("parsed_documents").insert({
+        console.log(`\n=== INSERTING TO DATABASE ===`);
+        const insertResult = await supabase.from("parsed_documents").insert({
           file_id: fileData.id,
           session_id: sessionId,
           user_id: fileData.user_id,
@@ -411,7 +453,13 @@ Deno.serve(async (req: Request) => {
           },
         });
 
-        console.log(`Successfully processed ${fileData.file_name}`);
+        if (insertResult.error) {
+          console.error(`❌ Database insert error:`, insertResult.error);
+        } else {
+          console.log(`✅ Successfully inserted to database`);
+        }
+
+        console.log(`✅ Successfully processed ${fileData.file_name}`);
       } catch (fileError: any) {
         console.error(`Error processing file ${fileId}:`, fileError);
         errors.push({ fileId, error: fileError.message });
