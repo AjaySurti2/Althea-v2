@@ -385,7 +385,15 @@ Deno.serve(async (req: Request) => {
         console.log(`\n=== AI PARSED DATA RECEIVED ===`);
         console.log(`Raw aiParsedData:`, JSON.stringify(aiParsedData, null, 2));
 
-        // Support both old and new format
+        const metrics = aiParsedData.metrics || aiParsedData.key_metrics || [];
+        const key_metrics = metrics.map((metric: any) => ({
+          test_name: metric.test || metric.test_name || "",
+          value: metric.value || "",
+          unit: metric.unit || "",
+          reference_range: metric.range || metric.reference_range || "",
+          interpretation: metric.status || metric.interpretation || ""
+        }));
+
         const structured_data = {
           profile_name: aiParsedData.patient?.name || aiParsedData.profile_name || "",
           patient_info: aiParsedData.patient || {
@@ -402,7 +410,7 @@ Deno.serve(async (req: Request) => {
             report_date: aiParsedData.lab_details?.report_date || aiParsedData.report_date || "",
             test_date: aiParsedData.lab_details?.test_date || ""
           },
-          key_metrics: aiParsedData.metrics || aiParsedData.key_metrics || [],
+          key_metrics,
           medications: aiParsedData.medications || [],
           diagnoses: aiParsedData.diagnoses || [],
           recommendations: aiParsedData.recommendations || [],
