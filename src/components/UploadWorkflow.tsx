@@ -132,6 +132,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       setParsingInProgress(true);
 
       try {
+        console.log('=== Calling parse-documents edge function ===');
+        console.log('Session ID:', session.id);
+        console.log('File IDs:', uploadedFileIds);
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-documents`,
           {
@@ -151,17 +155,31 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           }
         );
 
+        console.log('Edge function response status:', response.status);
+
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to parse documents');
+          const errorText = await response.text();
+          console.error('Edge function error response:', errorText);
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: errorText };
+          }
+          throw new Error(errorData.error || `Failed to parse documents (${response.status})`);
         }
+
+        const result = await response.json();
+        console.log('Edge function success:', result);
 
         setParsingInProgress(false);
         setShowParsedDataReview(true);
       } catch (parseError: any) {
-        console.error('Parsing error:', parseError);
+        console.error('=== Document Parsing Failed ===');
+        console.error('Error:', parseError);
+        console.error('Stack:', parseError.stack);
         setParsingInProgress(false);
-        alert(`Document parsing failed: ${parseError.message}. You can still continue.`);
+        alert(`Document parsing failed: ${parseError.message}\n\nCheck the console for details. You can still continue, but documents won't be parsed.`);
         setShowReview(true);
       }
     } catch (error: any) {
