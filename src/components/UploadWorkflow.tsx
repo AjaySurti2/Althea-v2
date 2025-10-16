@@ -256,6 +256,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Medical Report - Althea AI</title>
           <style>
             * {
@@ -570,18 +572,30 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       </html>
     `;
 
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Althea_Medical_Report_${new Date().toISOString().split('T')[0]}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      console.log('Opening report in new window...');
 
-      console.log('Report downloaded successfully');
-      alert('Your medical report has been downloaded. Open it in your browser and use Print to save as PDF.');
+      // Open in new window instead of download to avoid blob URL issues
+      const newWindow = window.open('', '_blank');
+
+      if (!newWindow) {
+        console.warn('Popup blocked, falling back to download');
+        // Fallback to download if popup is blocked
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Althea_Medical_Report_${new Date().toISOString().split('T')[0]}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        alert('Your medical report has been downloaded. Open it in your browser and use Print to save as PDF.');
+      } else {
+        newWindow.document.write(htmlContent);
+        newWindow.document.close();
+        console.log('Report opened successfully in new window');
+        alert('Your medical report has been opened in a new tab. Use your browser\'s Print function (Ctrl/Cmd + P) to save as PDF.');
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF report. Please try again.');
