@@ -19,6 +19,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [showParsedDataReview, setShowParsedDataReview] = useState(false);
   const [showDataPreview, setShowDataPreview] = useState(false);
   const [parsingInProgress, setParsingInProgress] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState<{ configured: boolean; tested: boolean; working: boolean } | null>(null);
 
   const [files, setFiles] = useState<File[]>([]);
   const [tone, setTone] = useState<'friendly' | 'professional' | 'empathetic'>('friendly');
@@ -27,6 +28,39 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [, setUploadComplete] = useState(false);
   const MAX_FILES = 5;
+
+  React.useEffect(() => {
+    checkApiKeyStatus();
+  }, []);
+
+  const checkApiKeyStatus = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-api-key`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setApiKeyStatus({
+          configured: result.apiKeyConfigured || false,
+          tested: true,
+          working: result.apiConnectionTest?.ok || false,
+        });
+      } else {
+        setApiKeyStatus({ configured: false, tested: true, working: false });
+      }
+    } catch (error) {
+      console.error('Failed to check API key status:', error);
+      setApiKeyStatus({ configured: false, tested: false, working: false });
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -818,6 +852,42 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               <X className="w-6 h-6" />
             </button>
           </div>
+
+          {apiKeyStatus && (
+            <div className={`mb-6 p-4 rounded-lg border ${
+              apiKeyStatus.configured && apiKeyStatus.working
+                ? darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'
+                : darkMode ? 'bg-amber-900/20 border-amber-800' : 'bg-amber-50 border-amber-200'
+            }`}>
+              <div className="flex items-center space-x-3">
+                {apiKeyStatus.configured && apiKeyStatus.working ? (
+                  <>
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className={`text-sm font-medium ${darkMode ? 'text-green-400' : 'text-green-800'}`}>
+                        AI Parsing Ready
+                      </p>
+                      <p className={`text-xs ${darkMode ? 'text-green-400/70' : 'text-green-700'}`}>
+                        Real medical data extraction is enabled
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <p className={`text-sm font-medium ${darkMode ? 'text-amber-400' : 'text-amber-800'}`}>
+                        {!apiKeyStatus.configured ? 'API Key Not Configured' : 'API Key Issue Detected'}
+                      </p>
+                      <p className={`text-xs ${darkMode ? 'text-amber-400/70' : 'text-amber-700'}`}>
+                        Mock data will be used. Configure ANTHROPIC_API_KEY in Supabase for real parsing.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="mb-8">
             <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
