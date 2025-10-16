@@ -74,16 +74,42 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
       setLoading(true);
       setError(null);
 
+      console.log('Loading parsed documents for session:', sessionId);
+
       const { data: parsedData, error: parsedError } = await supabase
         .from('parsed_documents')
         .select('*')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true });
 
-      if (parsedError) throw parsedError;
+      console.log('Parsed documents query result:', {
+        count: parsedData?.length || 0,
+        error: parsedError?.message,
+        data: parsedData
+      });
+
+      if (parsedError) {
+        console.error('Database error loading parsed documents:', parsedError);
+        throw new Error(`Database error: ${parsedError.message}. Please ensure documents were properly uploaded and parsed.`);
+      }
 
       if (!parsedData || parsedData.length === 0) {
-        setError('No parsed documents found. Please go back and try uploading again.');
+        console.warn('No parsed documents found for session:', sessionId);
+
+        const { data: filesData, error: filesError } = await supabase
+          .from('files')
+          .select('id, file_name')
+          .eq('session_id', sessionId);
+
+        if (filesError) {
+          console.error('Error checking files:', filesError);
+        }
+
+        if (!filesData || filesData.length === 0) {
+          setError('No files were uploaded for this session. Please go back and upload your documents.');
+        } else {
+          setError(`Found ${filesData.length} uploaded file(s), but they haven't been parsed yet. This may mean:\n\n1. The parsing process is still running - please wait a moment and try again\n2. The parsing failed - check the console for errors\n3. The edge function needs to be deployed\n\nPlease go back and try uploading again, or contact support if the issue persists.`);
+        }
         return;
       }
 
@@ -92,19 +118,24 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
         .select('id, file_name')
         .eq('session_id', sessionId);
 
-      if (filesError) throw filesError;
+      if (filesError) {
+        console.warn('Error loading file names:', filesError);
+      }
 
       const filesMap = new Map(filesData?.map(f => [f.id, f.file_name]) || []);
 
       const enrichedData = parsedData.map(doc => ({
         ...doc,
-        file_name: filesMap.get(doc.file_id) || 'Unknown File'
+        file_name: filesMap.get(doc.file_id) || 'Unknown File',
+        structured_data: doc.structured_data || {},
+        confidence_scores: doc.confidence_scores || {}
       }));
 
+      console.log('Successfully loaded parsed documents:', enrichedData.length);
       setParsedDocuments(enrichedData);
     } catch (err: any) {
       console.error('Error loading parsed documents:', err);
-      setError(err.message || 'Failed to load parsed documents');
+      setError(err.message || 'Failed to load parsed documents. Please check the console for details.');
     } finally {
       setLoading(false);
     }
@@ -200,13 +231,13 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
           darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
         }`}>
           <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className={`font-semibold mb-1 ${darkMode ? 'text-red-400' : 'text-red-800'}`}>
+          <div className="flex-1">
+            <p className={`font-semibold mb-2 ${darkMode ? 'text-red-400' : 'text-red-800'}`}>
               Unable to Load Parsed Data
             </p>
-            <p className={`text-sm ${darkMode ? 'text-red-400/80' : 'text-red-700'}`}>
+            <div className={`text-sm whitespace-pre-line ${darkMode ? 'text-red-400/80' : 'text-red-700'}`}>
               {error}
-            </p>
+            </div>
           </div>
         </div>
 
