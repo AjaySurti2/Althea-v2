@@ -68,11 +68,27 @@ Return ONLY valid JSON, no explanations.`;
 
 async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "claude-3-haiku-20240307"): Promise<string> {
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!anthropicApiKey) return "";
+  if (!anthropicApiKey) {
+    console.error("❌ ANTHROPIC_API_KEY not found in environment");
+    throw new Error("ANTHROPIC_API_KEY not configured");
+  }
 
   try {
-    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    console.log(`📄 Converting PDF to base64 (${arrayBuffer.byteLength} bytes)...`);
 
+    // Convert to base64 in chunks to avoid stack overflow
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+      binary += String.fromCharCode(...chunk);
+    }
+    const base64Pdf = btoa(binary);
+
+    console.log(`✅ Base64 conversion complete (${base64Pdf.length} chars)`);
+
+    console.log(`🤖 Calling Anthropic API with ${model}...`);
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -103,27 +119,48 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "cla
       }),
     });
 
+    console.log(`📡 Anthropic API response status: ${response.status}`);
+
     if (!response.ok) {
-      console.error(`PDF extraction error (${model}): ${response.status}`);
-      return "";
+      const errorBody = await response.text();
+      console.error(`❌ PDF extraction failed (${model}): ${response.status}`);
+      console.error(`Error details: ${errorBody}`);
+      throw new Error(`Anthropic API error ${response.status}: ${errorBody.substring(0, 200)}`);
     }
 
     const result = await response.json();
-    const text = result.content[0].text || "";
+    const text = result.content?.[0]?.text || "";
+
+    if (!text || text.length < 50) {
+      console.error(`⚠️ Extracted text too short: ${text.length} chars`);
+      throw new Error(`Insufficient text extracted (${text.length} chars)`);
+    }
+
     console.log(`✅ PDF extracted with ${model}: ${text.length} chars`);
     return text;
-  } catch (error) {
-    console.error("PDF extraction error:", error);
-    return "";
+  } catch (error: any) {
+    console.error("❌ PDF extraction error:", error.message || error);
+    throw error;
   }
 }
 
 async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, model: string = "claude-3-haiku-20240307"): Promise<string> {
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!anthropicApiKey) return "";
+  if (!anthropicApiKey) {
+    console.error("❌ ANTHROPIC_API_KEY not found in environment");
+    throw new Error("ANTHROPIC_API_KEY not configured");
+  }
 
   try {
-    const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    // Convert to base64 in chunks to avoid stack overflow
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+      binary += String.fromCharCode(...chunk);
+    }
+    const base64Image = btoa(binary);
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -156,17 +193,25 @@ async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, 
     });
 
     if (!response.ok) {
-      console.error(`Image OCR error (${model}): ${response.status}`);
-      return "";
+      const errorBody = await response.text();
+      console.error(`❌ Image OCR failed (${model}): ${response.status}`);
+      console.error(`Error details: ${errorBody}`);
+      throw new Error(`Anthropic API error ${response.status}: ${errorBody.substring(0, 200)}`);
     }
 
     const result = await response.json();
-    const text = result.content[0].text || "";
+    const text = result.content?.[0]?.text || "";
+
+    if (!text || text.length < 50) {
+      console.error(`⚠️ Extracted text too short: ${text.length} chars`);
+      throw new Error(`Insufficient text extracted (${text.length} chars)`);
+    }
+
     console.log(`✅ Image OCR with ${model}: ${text.length} chars`);
     return text;
-  } catch (error) {
-    console.error("Image OCR error:", error);
-    return "";
+  } catch (error: any) {
+    console.error("❌ Image OCR error:", error.message || error);
+    throw error;
   }
 }
 
@@ -214,7 +259,7 @@ async function parseWithAI(documentText: string, fileName: string, attemptNumber
 
   const models = [
     "claude-3-haiku-20240307",
-    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20240620",
     "claude-3-opus-20240229"
   ];
 
@@ -490,22 +535,31 @@ Deno.serve(async (req: Request) => {
         console.log(`Downloaded ${arrayBuffer.byteLength} bytes`);
 
         let documentText = "";
-        if (fileData.file_type === "application/pdf") {
-          documentText = await extractTextFromPDF(arrayBuffer);
-          if (!documentText || documentText.length < 100) {
-            console.log("Retrying PDF extraction with Sonnet...");
-            documentText = await extractTextFromPDF(arrayBuffer, "claude-3-5-sonnet-20241022");
+        try {
+          if (fileData.file_type === "application/pdf") {
+            try {
+              documentText = await extractTextFromPDF(arrayBuffer);
+            } catch (error: any) {
+              console.log(`⚠️ Haiku failed, retrying with Sonnet: ${error.message}`);
+              documentText = await extractTextFromPDF(arrayBuffer, "claude-3-5-sonnet-20240620");
+            }
+          } else if (fileData.file_type.startsWith("image/")) {
+            try {
+              documentText = await extractTextFromImage(arrayBuffer, fileData.file_type);
+            } catch (error: any) {
+              console.log(`⚠️ Haiku failed, retrying with Sonnet: ${error.message}`);
+              documentText = await extractTextFromImage(arrayBuffer, fileData.file_type, "claude-3-5-sonnet-20240620");
+            }
           }
-        } else if (fileData.file_type.startsWith("image/")) {
-          documentText = await extractTextFromImage(arrayBuffer, fileData.file_type);
-          if (!documentText || documentText.length < 100) {
-            console.log("Retrying image OCR with Sonnet...");
-            documentText = await extractTextFromImage(arrayBuffer, fileData.file_type, "claude-3-5-sonnet-20241022");
-          }
+        } catch (extractError: any) {
+          console.error(`❌ All extraction attempts failed: ${extractError.message}`);
+          errors.push({ fileId, error: `Text extraction failed: ${extractError.message}` });
+          continue;
         }
 
         if (!documentText || documentText.length < 50) {
-          errors.push({ fileId, error: "Text extraction failed" });
+          console.error(`❌ Extracted text too short: ${documentText.length} chars`);
+          errors.push({ fileId, error: "Text extraction failed - insufficient content" });
           continue;
         }
 
