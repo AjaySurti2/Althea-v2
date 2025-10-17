@@ -38,9 +38,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-api-key`,
         {
-          method: 'POST',
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json',
           },
         }
@@ -48,12 +47,16 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
       if (response.ok) {
         const result = await response.json();
+        console.log('API Key Test Result:', result);
         setApiKeyStatus({
           configured: result.apiKeyConfigured || false,
           tested: true,
           working: result.apiConnectionTest?.ok || false,
         });
       } else {
+        console.error('API key test failed:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error details:', errorText);
         setApiKeyStatus({ configured: false, tested: true, working: false });
       }
     } catch (error) {
