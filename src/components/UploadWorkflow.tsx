@@ -173,13 +173,18 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         console.log('Session ID:', session.id);
         console.log('File IDs:', uploadedFileIds);
 
+        const { data: { session: userSession } } = await supabase.auth.getSession();
+        const accessToken = userSession?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        console.log('Using access token for Edge Function:', accessToken ? 'Token found' : 'No token');
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-documents`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               sessionId: session.id,
