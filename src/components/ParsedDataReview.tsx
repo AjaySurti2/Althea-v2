@@ -26,6 +26,19 @@ interface ParsedDocument {
       reference_range?: string;
       interpretation?: string;
     }>;
+    panels?: Array<{
+      panel_name: string;
+      tests: Array<{
+        test_name: string;
+        value: string;
+        unit?: string;
+        range_min?: string;
+        range_max?: string;
+        range_text?: string;
+        status?: string;
+        category?: string;
+      }>;
+    }>;
     summary?: string;
     patient_info?: {
       name?: string;
@@ -141,6 +154,29 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
     }
   };
 
+  // Helper to flatten panels into metrics array
+  const flattenPanelsToMetrics = (doc: ParsedDocument) => {
+    // If we have panels structure (new OpenAI format), flatten it
+    if (doc.structured_data.panels && doc.structured_data.panels.length > 0) {
+      const metrics: any[] = [];
+      for (const panel of doc.structured_data.panels) {
+        for (const test of panel.tests || []) {
+          metrics.push({
+            test_name: test.test_name,
+            value: test.value,
+            unit: test.unit || '',
+            reference_range: test.range_text || `${test.range_min || ''}-${test.range_max || ''}`.replace(/^-$/, ''),
+            interpretation: test.status,
+            status: test.status
+          });
+        }
+      }
+      return metrics;
+    }
+    // Otherwise use existing key_metrics or test_results
+    return doc.structured_data.key_metrics || doc.structured_data.test_results || [];
+  };
+
   const getStatusColor = (status?: string) => {
     if (!status) return darkMode ? 'text-gray-400' : 'text-gray-600';
     const normalized = status.toLowerCase();
@@ -148,6 +184,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
     if (normalized.includes('high') || normalized.includes('elevated')) return 'text-red-600';
     if (normalized.includes('low')) return 'text-amber-600';
     if (normalized.includes('borderline')) return 'text-orange-600';
+    if (normalized.includes('critical')) return 'text-red-700';
     return darkMode ? 'text-gray-400' : 'text-gray-600';
   };
 
@@ -508,7 +545,9 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                 </div>
               )}
 
-              {((doc.structured_data.key_metrics && doc.structured_data.key_metrics.length > 0) || (doc.structured_data.test_results && doc.structured_data.test_results.length > 0)) && (
+              {(() => {
+                const metrics = flattenPanelsToMetrics(doc);
+                return metrics.length > 0 && (
                 <div className={`p-4 rounded-lg md:col-span-2 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
                   <div className="flex items-center space-x-2 mb-3">
                     <Activity className="w-5 h-5 text-green-600" />
@@ -527,7 +566,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {((editingDoc === doc.id ? editedData.key_metrics : doc.structured_data.key_metrics) || doc.structured_data.test_results || []).map((test: any, idx: number) => (
+                        {metrics.map((test: any, idx: number) => (
                           <tr key={idx} className={`border-b ${darkMode ? 'border-gray-800' : 'border-gray-100'}`}>
                             <td className={`py-2 px-2 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                               {editingDoc === doc.id ? (
@@ -598,7 +637,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     </table>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         ))}
