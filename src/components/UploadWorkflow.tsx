@@ -169,7 +169,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       setParsingInProgress(true);
 
       try {
-        console.log('=== Calling parse-documents edge function ===');
+        console.log('=== Calling parse-medical-report edge function ===');
         console.log('Session ID:', session.id);
         console.log('File IDs:', uploadedFileIds);
 
@@ -179,7 +179,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         console.log('Using access token for Edge Function:', accessToken ? 'Token found' : 'No token');
 
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-documents`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-medical-report`,
           {
             method: 'POST',
             headers: {
@@ -189,10 +189,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             body: JSON.stringify({
               sessionId: session.id,
               fileIds: uploadedFileIds,
-              customization: {
-                tone,
-                language: languageLevel,
-              },
             }),
           }
         );
