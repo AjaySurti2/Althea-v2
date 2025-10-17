@@ -313,23 +313,38 @@ async function saveStructuredData(supabase: any, fileData: any, sessionId: strin
   const { parsed, model, attemptNumber } = parsedResult;
   const userId = fileData.user_id;
 
-  const patientData = {
-    user_id: userId,
-    name: parsed.patient?.name || "Unknown Patient",
-    age: parsed.patient?.age || null,
-    gender: parsed.patient?.gender || null,
-    contact: parsed.patient?.contact || null,
-    address: parsed.patient?.address || null,
-  };
+  const patientName = parsed.patient?.name || "Unknown Patient";
 
-  const { data: patient, error: patientError } = await supabase
+  const { data: existingPatient } = await supabase
     .from("patients")
-    .upsert(patientData, { onConflict: "user_id,name" })
-    .select()
-    .single();
+    .select("*")
+    .eq("user_id", userId)
+    .eq("name", patientName)
+    .maybeSingle();
 
-  if (patientError) {
-    console.error("Patient insert error:", patientError);
+  let patient = existingPatient;
+
+  if (!existingPatient) {
+    const patientData = {
+      user_id: userId,
+      name: patientName,
+      age: parsed.patient?.age || null,
+      gender: parsed.patient?.gender || null,
+      contact: parsed.patient?.contact || null,
+      address: parsed.patient?.address || null,
+    };
+
+    const { data: newPatient, error: patientError } = await supabase
+      .from("patients")
+      .insert(patientData)
+      .select()
+      .single();
+
+    if (patientError) {
+      console.error("Patient insert error:", patientError);
+    } else {
+      patient = newPatient;
+    }
   }
 
   const labReportData = {
