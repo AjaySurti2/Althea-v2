@@ -1,0 +1,36 @@
+name: Sync Supabase Schema
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-sync.yml"
+
+jobs:
+  sync-schema:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
+      - name: Link Supabase Project
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          npx supabase link --db-url "$SUPABASE_DB_URL"
+
+      - name: Push Database Schema
+        run: npx supabase db push
+
+      - name: Confirm Schema Sync
+        run: npx supabase status
