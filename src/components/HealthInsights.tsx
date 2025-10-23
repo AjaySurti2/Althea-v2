@@ -478,9 +478,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         <div className="flex items-center space-x-3">
           <button
             onClick={() => setShowReportManager(!showReportManager)}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              darkMode ? 'bg-purple-700 text-white hover:bg-purple-600' : 'bg-purple-600 text-white hover:bg-purple-700'
-            }`}
+            className="flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600"
           >
             <FileText className="w-5 h-5" />
             <span>Generate Report</span>
