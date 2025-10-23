@@ -857,38 +857,20 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             </button>
           </div>
 
-          {apiKeyStatus && (
+          {apiKeyStatus && apiKeyStatus.configured && apiKeyStatus.working && (
             <div className={`mb-6 p-4 rounded-lg border ${
-              apiKeyStatus.configured && apiKeyStatus.working
-                ? darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'
-                : darkMode ? 'bg-amber-900/20 border-amber-800' : 'bg-amber-50 border-amber-200'
+              darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'
             }`}>
               <div className="flex items-center space-x-3">
-                {apiKeyStatus.configured && apiKeyStatus.working ? (
-                  <>
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <div>
-                      <p className={`text-sm font-medium ${darkMode ? 'text-green-400' : 'text-green-800'}`}>
-                        AI Parsing Ready
-                      </p>
-                      <p className={`text-xs ${darkMode ? 'text-green-400/70' : 'text-green-700'}`}>
-                        Real medical data extraction is enabled
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 text-amber-600" />
-                    <div>
-                      <p className={`text-sm font-medium ${darkMode ? 'text-amber-400' : 'text-amber-800'}`}>
-                        {!apiKeyStatus.configured ? 'API Key Not Configured' : 'API Key Issue Detected'}
-                      </p>
-                      <p className={`text-xs ${darkMode ? 'text-amber-400/70' : 'text-amber-700'}`}>
-                        Configure OPENAI_API_KEY in Supabase Edge Functions secrets for real medical data parsing.
-                      </p>
-                    </div>
-                  </>
-                )}
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className={`text-sm font-medium ${darkMode ? 'text-green-400' : 'text-green-800'}`}>
+                    AI Parsing Ready
+                  </p>
+                  <p className={`text-xs ${darkMode ? 'text-green-400/70' : 'text-green-700'}`}>
+                    Real medical data extraction is enabled
+                  </p>
+                </div>
               </div>
             </div>
           )}
