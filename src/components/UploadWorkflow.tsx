@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { DocumentReview } from './DocumentReview';
 import { DataPreview } from './DataPreview';
 import { ParsedDataReview } from './ParsedDataReview';
+import { HealthInsights } from './HealthInsights';
+import { MetricsTracking } from './MetricsTracking';
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -18,6 +20,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [showReview, setShowReview] = useState(false);
   const [showParsedDataReview, setShowParsedDataReview] = useState(false);
   const [showDataPreview, setShowDataPreview] = useState(false);
+  const [showHealthInsights, setShowHealthInsights] = useState(false);
+  const [showMetricsTracking, setShowMetricsTracking] = useState(false);
   const [parsingInProgress, setParsingInProgress] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState<{ configured: boolean; tested: boolean; working: boolean } | null>(null);
 
@@ -704,12 +708,27 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleParsedDataContinue = () => {
     setShowParsedDataReview(false);
-    setCurrentStep(2);
+    setShowHealthInsights(true);
   };
 
   const handleParsedDataBack = () => {
     setShowParsedDataReview(false);
     setCurrentStep(1);
+  };
+
+  const handleHealthInsightsContinue = () => {
+    setShowHealthInsights(false);
+    setShowMetricsTracking(true);
+  };
+
+  const handleHealthInsightsBack = () => {
+    setShowHealthInsights(false);
+    setShowParsedDataReview(true);
+  };
+
+  const handleMetricsTrackingBack = () => {
+    setShowMetricsTracking(false);
+    setShowHealthInsights(true);
   };
 
   const handleReviewBack = () => {
@@ -780,6 +799,79 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 darkMode={darkMode}
                 onConfirm={handleParsedDataContinue}
                 onBack={handleParsedDataBack}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showHealthInsights && sessionId) {
+    return (
+      <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="min-h-screen px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Upload Health Report
+                </h1>
+                <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Step 3: AI Health Insights
+                </p>
+              </div>
+              <button
+                onClick={onCancel}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <HealthInsights
+                sessionId={sessionId}
+                darkMode={darkMode}
+                onContinue={handleHealthInsightsContinue}
+                onBack={handleHealthInsightsBack}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showMetricsTracking && sessionId) {
+    return (
+      <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="min-h-screen px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Upload Health Report
+                </h1>
+                <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Step 4: Track & Download
+                </p>
+              </div>
+              <button
+                onClick={onCancel}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <MetricsTracking
+                sessionId={sessionId}
+                darkMode={darkMode}
+                onBack={handleMetricsTrackingBack}
               />
             </div>
           </div>
