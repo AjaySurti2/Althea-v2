@@ -15,28 +15,27 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
     const result: any = {
       timestamp: new Date().toISOString(),
-      apiKeyConfigured: !!anthropicApiKey,
-      apiKeyLength: anthropicApiKey ? anthropicApiKey.length : 0,
-      apiKeyPrefix: anthropicApiKey ? anthropicApiKey.substring(0, 10) + "..." : "Not configured",
+      apiKeyConfigured: !!openaiApiKey,
+      apiKeyLength: openaiApiKey ? openaiApiKey.length : 0,
+      apiKeyPrefix: openaiApiKey ? openaiApiKey.substring(0, 10) + "..." : "Not configured",
     };
 
-    if (anthropicApiKey) {
+    if (openaiApiKey) {
       try {
-        console.log("Testing Claude API connection...");
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
+        console.log("Testing OpenAI API connection...");
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": anthropicApiKey,
-            "anthropic-version": "2023-06-01",
+            "Authorization": `Bearer ${openaiApiKey}`,
           },
           body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
-            max_tokens: 100,
+            model: "gpt-4o-mini",
+            max_tokens: 50,
             messages: [
               {
                 role: "user",
@@ -54,23 +53,23 @@ Deno.serve(async (req: Request) => {
 
         if (response.ok) {
           const data = await response.json();
-          result.apiConnectionTest.response = data.content[0].text;
-          result.apiConnectionTest.message = "Claude API is working correctly!";
+          result.apiConnectionTest.response = data.choices[0].message.content;
+          result.apiConnectionTest.message = "OpenAI API is working correctly!";
         } else {
           const errorText = await response.text();
           result.apiConnectionTest.error = errorText;
-          result.apiConnectionTest.message = "Claude API returned an error";
+          result.apiConnectionTest.message = "OpenAI API returned an error";
         }
       } catch (apiError: any) {
         result.apiConnectionTest = {
           error: apiError.message,
           details: apiError.toString(),
-          message: "Failed to connect to Claude API",
+          message: "Failed to connect to OpenAI API",
         };
       }
     } else {
-      result.message = "ANTHROPIC_API_KEY is not configured in Supabase secrets";
-      result.instructions = "Please add ANTHROPIC_API_KEY to your Supabase project secrets";
+      result.message = "OPENAI_API_KEY is not configured in Supabase secrets";
+      result.instructions = "Please add OPENAI_API_KEY to your Supabase project secrets";
     }
 
     return new Response(JSON.stringify(result, null, 2), {

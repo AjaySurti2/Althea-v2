@@ -884,7 +884,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         {!apiKeyStatus.configured ? 'API Key Not Configured' : 'API Key Issue Detected'}
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-amber-400/70' : 'text-amber-700'}`}>
-                        Mock data will be used. Configure ANTHROPIC_API_KEY in Supabase for real parsing.
+                        Configure OPENAI_API_KEY in Supabase Edge Functions secrets for real medical data parsing.
                       </p>
                     </div>
                   </>
