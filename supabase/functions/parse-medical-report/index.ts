@@ -429,13 +429,52 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
   console.log(`✅ Inserted ${totalTests} test results`);
 
   // 4. Save parsed_documents entry
+  // Flatten panels into key_metrics and test_results arrays for backward compatibility
+  const key_metrics = [];
+  const test_results = [];
+
+  for (const panel of (parsed.panels || [])) {
+    for (const test of (panel.tests || [])) {
+      key_metrics.push({
+        test_name: test.test_name,
+        value: test.value,
+        unit: test.unit || "",
+        reference_range: test.range_text || `${test.range_min || ""}-${test.range_max || ""}`.replace(/^-$/, ""),
+        interpretation: test.status,
+      });
+
+      test_results.push({
+        test_name: test.test_name,
+        value: test.value,
+        unit: test.unit || "",
+        reference_range: test.range_text || `${test.range_min || ""}-${test.range_max || ""}`,
+        status: test.status,
+      });
+    }
+  }
+
   const structured_data = {
     profile_name: parsed.patient?.name || "",
-    patient_info: parsed.patient || {},
-    report_date: parsed.lab_details?.report_date || "",
+    patient_info: {
+      name: parsed.patient?.name || "",
+      age: parsed.patient?.age || "",
+      gender: parsed.patient?.gender || "",
+      id: "",
+    },
     lab_name: parsed.lab_details?.lab_name || "",
     doctor_name: parsed.lab_details?.doctor || "",
+    doctor_info: {
+      name: parsed.lab_details?.doctor || "",
+      specialty: "",
+    },
+    dates: {
+      test_date: parsed.lab_details?.test_date || "",
+      report_date: parsed.lab_details?.report_date || "",
+    },
+    report_date: parsed.lab_details?.report_date || "",
     panels: parsed.panels || [],
+    key_metrics,
+    test_results,
     summary: parsed.summary || "",
   };
 

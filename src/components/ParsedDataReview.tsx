@@ -156,8 +156,21 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
 
   // Helper to flatten panels into metrics array
   const flattenPanelsToMetrics = (doc: ParsedDocument) => {
-    // If we have panels structure (new OpenAI format), flatten it
+    // Try key_metrics first (if edge function has been fixed)
+    if (doc.structured_data.key_metrics && doc.structured_data.key_metrics.length > 0) {
+      console.log('Using key_metrics:', doc.structured_data.key_metrics.length, 'tests');
+      return doc.structured_data.key_metrics;
+    }
+
+    // Try test_results next
+    if (doc.structured_data.test_results && doc.structured_data.test_results.length > 0) {
+      console.log('Using test_results:', doc.structured_data.test_results.length, 'tests');
+      return doc.structured_data.test_results;
+    }
+
+    // Fallback to flattening panels structure
     if (doc.structured_data.panels && doc.structured_data.panels.length > 0) {
+      console.log('Flattening panels:', doc.structured_data.panels.length, 'panels');
       const metrics: any[] = [];
       for (const panel of doc.structured_data.panels) {
         for (const test of panel.tests || []) {
@@ -171,10 +184,13 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
           });
         }
       }
+      console.log('Flattened to', metrics.length, 'tests');
       return metrics;
     }
-    // Otherwise use existing key_metrics or test_results
-    return doc.structured_data.key_metrics || doc.structured_data.test_results || [];
+
+    // No data found
+    console.warn('No test metrics found in document');
+    return [];
   };
 
   const getStatusColor = (status?: string) => {

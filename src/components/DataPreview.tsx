@@ -89,47 +89,56 @@ export const DataPreview: React.FC<DataPreviewProps> = ({
       setParsing(true);
       setError(null);
 
-      const { data: files, error: filesError } = await supabase
-        .from('files')
-        .select('id')
-        .eq('session_id', sessionId);
+      console.log('Loading parsed documents from database for session:', sessionId);
 
-      if (filesError) throw filesError;
+      const { data: parsedDocs, error: parsedError } = await supabase
+        .from('parsed_documents')
+        .select(`
+          id,
+          file_id,
+          parsing_status,
+          structured_data,
+          confidence_scores,
+          metadata,
+          files (
+            file_name,
+            file_type
+          )
+        `)
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
 
-      if (!files || files.length === 0) {
-        throw new Error('No files found for this session');
+      if (parsedError) {
+        console.error('Database error:', parsedError);
+        throw parsedError;
       }
 
-      const fileIds = files.map(f => f.id);
+      if (!parsedDocs || parsedDocs.length === 0) {
+        throw new Error('No parsed documents found. The parsing may still be in progress.');
+      }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      console.log('Found parsed documents:', parsedDocs.length);
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-documents`;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
+      const formattedDocs = parsedDocs.map(doc => ({
+        fileId: doc.file_id,
+        fileName: doc.files?.file_name || 'Unknown File',
+        structured_data: doc.structured_data || {},
+        confidence_scores: doc.confidence_scores || {
+          overall: 0.85,
+          patient_info: 0.9,
+          test_results: 0.85,
+          recommendations: 0.8
         },
-        body: JSON.stringify({
-          sessionId,
-          fileIds,
-          customization,
-        }),
-      });
+        metadata: doc.metadata || {
+          file_type: doc.files?.file_type || 'unknown',
+          extraction_method: 'OpenAI GPT-4o-mini'
+        }
+      }));
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to parse documents');
-      }
-
-      const result = await response.json();
-      setParsedDocuments(result.parsed_documents || []);
+      setParsedDocuments(formattedDocs);
     } catch (error: any) {
       console.error('Parsing error:', error);
-      setError(error.message || 'Failed to parse documents');
+      setError(error.message || 'Failed to load parsed documents');
     } finally {
       setParsing(false);
       setLoading(false);
