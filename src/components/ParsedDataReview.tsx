@@ -121,7 +121,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
         if (!filesData || filesData.length === 0) {
           setError('No files were uploaded for this session. Please go back and upload your documents.');
         } else {
-          setError(`Found ${filesData.length} uploaded file(s), but they haven't been parsed yet. This may mean:\n\n1. The parsing process is still running - please wait a moment and try again\n2. The parsing failed - check the console for errors\n3. The edge function needs to be deployed\n\nPlease go back and try uploading again, or contact support if the issue persists.`);
+          setError(`Found ${filesData.length} uploaded file(s), but they haven't been parsed yet.\n\nPossible reasons:\n\n1. The parsing process is still running - please wait a moment\n2. The OpenAI API key may not be configured in Supabase Edge Functions\n3. The parsing failed due to an error (check browser console)\n\nIf this persists, please ensure OPENAI_API_KEY is set in your Supabase project's Edge Functions secrets, or contact support.`);
         }
         return;
       }

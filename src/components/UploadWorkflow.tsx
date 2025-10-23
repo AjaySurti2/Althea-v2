@@ -210,6 +210,16 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         const result = await response.json();
         console.log('Edge function success:', result);
 
+        if (result.errors && result.errors.length > 0) {
+          console.error('Edge function returned errors:', result.errors);
+          const errorMessages = result.errors.map((e: any) => e.error).join(', ');
+          throw new Error(`Parsing completed with errors: ${errorMessages}`);
+        }
+
+        if (!result.results || result.results.length === 0) {
+          throw new Error('No documents were successfully parsed. Please check if OPENAI_API_KEY is configured in Supabase Edge Functions secrets.');
+        }
+
         setParsingInProgress(false);
         setShowParsedDataReview(true);
       } catch (parseError: any) {
@@ -217,8 +227,18 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         console.error('Error:', parseError);
         console.error('Stack:', parseError.stack);
         setParsingInProgress(false);
-        alert(`Document parsing failed: ${parseError.message}\n\nCheck the console for details. You can still continue, but documents won't be parsed.`);
-        setShowReview(true);
+
+        const errorMessage = parseError.message || 'Unknown error';
+        const isApiKeyError = errorMessage.includes('OPENAI_API_KEY') || errorMessage.includes('API key');
+
+        if (isApiKeyError) {
+          alert(`API Configuration Error: ${errorMessage}\n\nThe OpenAI API key needs to be configured in Supabase. Please contact your system administrator.`);
+        } else {
+          alert(`Document parsing failed: ${errorMessage}\n\nCheck the console for details.`);
+        }
+
+        // Don't show review since parsing failed
+        setProcessing(false);
       }
     } catch (error: any) {
       alert(`Upload failed: ${error.message}`);
