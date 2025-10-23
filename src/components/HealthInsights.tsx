@@ -5,6 +5,7 @@ import {
   Lightbulb, FileText, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ReportManager } from './ReportManager';
 
 interface HealthInsightsProps {
   sessionId: string;
@@ -55,6 +56,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [tone, setTone] = useState('conversational');
   const [languageLevel, setLanguageLevel] = useState('simple_terms');
+  const [showReportManager, setShowReportManager] = useState(false);
 
   useEffect(() => {
     loadInsights();
@@ -473,14 +475,32 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           <span>Back</span>
         </button>
 
-        <button
-          onClick={onContinue}
-          className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-        >
-          <span>View Tracking & Download</span>
-          <ArrowRight className="w-5 h-5" />
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowReportManager(!showReportManager)}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+              darkMode ? 'bg-purple-700 text-white hover:bg-purple-600' : 'bg-purple-600 text-white hover:bg-purple-700'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span>Generate Report</span>
+          </button>
+
+          <button
+            onClick={onContinue}
+            className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+          >
+            <span>View Tracking & Download</span>
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </div>
       </div>
+
+      {showReportManager && (
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <ReportManager sessionId={sessionId} darkMode={darkMode} onClose={() => setShowReportManager(false)} />
+        </div>
+      )}
     </div>
   );
 };
