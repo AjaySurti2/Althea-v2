@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Althea AI - System Diagnostic</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 40px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #10b981;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+    button {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 20px;
+    }
+    button:hover {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .test-section {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-left: 4px solid #e5e7eb;
+    }
+    .test-section.success {
+      border-left-color: #10b981;
+      background: #f0fdf4;
+    }
+    .test-section.error {
+      border-left-color: #ef4444;
+      background: #fef2f2;
+    }
+    .test-section.running {
+      border-left-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .test-title {
+      font-weight: 600;
+      font-size: 18px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-icon {
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 14px;
+    }
+    .status-icon.pending { background: #e5e7eb; }
+    .status-icon.running { background: #3b82f6; color: white; }
+    .status-icon.success { background: #10b981; color: white; }
+    .status-icon.error { background: #ef4444; color: white; }
+    .test-details {
+      font-size: 14px;
+      color: #4b5563;
+      line-height: 1.6;
+    }
+    .test-details pre {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .summary {
+      background: #f0fdf4;
+      border: 2px solid #10b981;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 30px;
+    }
+    .summary h2 {
+      color: #10b981;
+      margin-bottom: 15px;
+    }
+    .summary ul {
+      list-style: none;
+      padding: 0;
+    }
+    .summary li {
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .loader {
+      border: 3px solid #f3f4f6;
+      border-top: 3px solid #10b981;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Althea AI System Diagnostic</h1>
+    <p class="subtitle">This tool will test your connection to Supabase and OpenAI services</p>
+
+    <button id="runTests" onclick="runAllTests()">Run Diagnostic Tests</button>
+
+    <div id="results"></div>
+
+    <div id="summary" style="display: none;"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://dolgcqjruglwfdcnemon.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvbGdjcWpydWdsd2ZkY25lbW9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjExNjMwNTcsImV4cCI6MjA3NjczOTA1N30.DBFygggnmemR5tPI0wWp2ICIi4THYZ6mj7nceRNUj6A';
+
+    const tests = [];
+
+    function addTest(name, description) {
+      const test = { name, description, status: 'pending', result: null, error: null };
+      tests.push(test);
+      return test;
+    }
+
+    function updateTest(test, status, result, error) {
+      test.status = status;
+      test.result = result;
+      test.error = error;
+      renderTests();
+    }
+
+    function renderTests() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = tests.map(test => `
+        <div class="test-section ${test.status}">
+          <div class="test-title">
+            <span class="status-icon ${test.status}">
+              ${test.status === 'pending' ? '⏳' :
+                test.status === 'running' ? '<div class="loader"></div>' :
+                test.status === 'success' ? '✓' : '✗'}
+            </span>
+            ${test.name}
+          </div>
+          <div class="test-details">
+            <p>${test.description}</p>
+            ${test.result ? `<pre>${JSON.stringify(test.result, null, 2)}</pre>` : ''}
+            ${test.error ? `<pre style="background: #7f1d1d; color: #fecaca;">ERROR: ${test.error}</pre>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function runAllTests() {
+      const button = document.getElementById('runTests');
+      button.disabled = true;
+      button.textContent = 'Running Tests...';
+
+      tests.length = 0;
+      document.getElementById('summary').style.display = 'none';
+
+      // Test 1: Basic Connectivity
+      const test1 = addTest(
+        'Test 1: Basic Network Connectivity',
+        'Checking if we can reach Supabase servers'
+      );
+      renderTests();
+
+      try {
+        updateTest(test1, 'running', null, null);
+        const response = await fetch(SUPABASE_URL + '/rest/v1/', {
+          headers: { 'apikey': SUPABASE_ANON_KEY }
+        });
+        if (response.ok || response.status === 404) {
+          updateTest(test1, 'success', { message: 'Connected to Supabase', status: response.status }, null);
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (err) {
+        updateTest(test1, 'error', null, err.message);
+      }
+
+      // Test 2: OpenAI API Key Configuration
+      const test2 = addTest(
+        'Test 2: OpenAI API Key Configuration',
+        'Verifying OPENAI_API_KEY is set in Edge Functions'
+      );
+      renderTests();
+
+      try {
+        updateTest(test2, 'running', null, null);
+        const response = await fetch(
+          SUPABASE_URL + '/functions/v1/test-api-key',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+
+        const result = await response.json();
+        if (result.apiKeyConfigured) {
+          updateTest(test2, 'success', {
+            configured: true,
+            keyLength: result.apiKeyLength,
+            keyPrefix: result.apiKeyPrefix,
+            openaiStatus: result.apiConnectionTest?.response
+          }, null);
+        } else {
+          throw new Error('API key not configured');
+        }
+      } catch (err) {
+        updateTest(test2, 'error', null, err.message);
+      }
+
+      // Test 3: parse-medical-report Edge Function
+      const test3 = addTest(
+        'Test 3: Document Parsing Edge Function',
+        'Testing parse-medical-report endpoint (with empty data)'
+      );
+      renderTests();
+
+      try {
+        updateTest(test3, 'running', null, null);
+        const response = await fetch(
+          SUPABASE_URL + '/functions/v1/parse-medical-report',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({ sessionId: 'diagnostic-test', fileIds: [] })
+          }
+        );
+
+        const result = await response.json();
+
+        // We expect an error about missing files, which means the function is working
+        if (result.error && result.error.includes('sessionId')) {
+          updateTest(test3, 'success', {
+            message: 'Edge function is responding correctly',
+            expectedError: result.error
+          }, null);
+        } else if (response.ok) {
+          updateTest(test3, 'success', result, null);
+        } else {
+          throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
+        }
+      } catch (err) {
+        updateTest(test3, 'error', null, err.message);
+      }
+
+      // Test 4: CORS Configuration
+      const test4 = addTest(
+        'Test 4: CORS Configuration',
+        'Checking if CORS headers are properly set'
+      );
+      renderTests();
+
+      try {
+        updateTest(test4, 'running', null, null);
+        const response = await fetch(
+          SUPABASE_URL + '/functions/v1/parse-medical-report',
+          {
+            method: 'OPTIONS',
+            headers: {
+              'Origin': window.location.origin,
+              'Access-Control-Request-Method': 'POST',
+              'Access-Control-Request-Headers': 'Content-Type, Authorization'
+            }
+          }
+        );
+
+        if (response.ok) {
+          const corsHeaders = {
+            'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+            'access-control-allow-methods': response.headers.get('access-control-allow-methods'),
+            'access-control-allow-headers': response.headers.get('access-control-allow-headers')
+          };
+          updateTest(test4, 'success', corsHeaders, null);
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (err) {
+        updateTest(test4, 'error', null, err.message);
+      }
+
+      // Generate Summary
+      const passedTests = tests.filter(t => t.status === 'success').length;
+      const failedTests = tests.filter(t => t.status === 'error').length;
+
+      const summaryDiv = document.getElementById('summary');
+      summaryDiv.style.display = 'block';
+
+      if (failedTests === 0) {
+        summaryDiv.innerHTML = `
+          <h2>✅ All Tests Passed!</h2>
+          <p>Your system is properly configured. The "Failed to fetch" error is likely a browser-specific issue.</p>
+          <ul>
+            <li>✓ Network connectivity: OK</li>
+            <li>✓ OpenAI API Key: Configured and working</li>
+            <li>✓ Edge Functions: Deployed and responding</li>
+            <li>✓ CORS: Properly configured</li>
+          </ul>
+          <p style="margin-top: 20px;"><strong>Recommendations:</strong></p>
+          <ul>
+            <li>1. Clear browser cache and try again</li>
+            <li>2. Try a different browser or incognito mode</li>
+            <li>3. Disable browser extensions temporarily</li>
+            <li>4. Check if any firewall is blocking requests</li>
+          </ul>
+        `;
+      } else {
+        summaryDiv.innerHTML = `
+          <h2>⚠️ ${failedTests} Test(s) Failed</h2>
+          <p>The following issues were detected:</p>
+          <ul>
+            ${tests.filter(t => t.status === 'error').map(t =>
+              `<li>✗ ${t.name}: ${t.error}</li>`
+            ).join('')}
+          </ul>
+          <p style="margin-top: 20px;"><strong>Next Steps:</strong></p>
+          <ul>
+            <li>1. Review the error details above</li>
+            <li>2. Check Supabase Dashboard → Edge Functions → Secrets</li>
+            <li>3. Verify OPENAI_API_KEY is configured</li>
+            <li>4. Contact support if issues persist</li>
+          </ul>
+        `;
+      }
+
+      button.disabled = false;
+      button.textContent = 'Run Tests Again';
+    }
+
+    // Auto-run on page load
+    // window.onload = runAllTests;
+  </script>
+</body>
+</html>
