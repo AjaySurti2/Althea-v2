@@ -628,9 +628,9 @@ Deno.serve(async (req: Request) => {
         if (!medicalFilesResult.error) {
           downloadData = medicalFilesResult.data;
         } else {
-          // Try reports bucket
+          // Try report-pdfs bucket as fallback
           const reportsResult = await supabase.storage
-            .from("reports")
+            .from("report-pdfs")
             .download(fileData.storage_path);
 
           if (!reportsResult.error) {

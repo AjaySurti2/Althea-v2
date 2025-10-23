@@ -98,6 +98,22 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
+      // Map session tone/languageLevel to edge function format
+      const toneMap: Record<string, string> = {
+        'friendly': 'conversational',
+        'professional': 'professional',
+        'empathetic': 'reassuring'
+      };
+
+      const languageMap: Record<string, string> = {
+        'simple': 'simple_terms',
+        'moderate': 'educated_patient',
+        'technical': 'medical_professional'
+      };
+
+      const mappedTone = toneMap[tone] || 'conversational';
+      const mappedLanguageLevel = languageMap[languageLevel] || 'simple_terms';
+
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-insights`;
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -107,8 +123,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         },
         body: JSON.stringify({
           sessionId,
-          tone,
-          languageLevel
+          tone: mappedTone,
+          languageLevel: mappedLanguageLevel
         })
       });
 
