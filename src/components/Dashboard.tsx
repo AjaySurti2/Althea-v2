@@ -171,7 +171,27 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      const selectedFiles = Array.from(e.target.files);
+
+      // Check for PDF files
+      const pdfFiles = selectedFiles.filter(file =>
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      );
+
+      if (pdfFiles.length > 0) {
+        alert(
+          `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
+          `Please convert your PDF medical reports to images:\n` +
+          `• Take screenshots of each page\n` +
+          `• Use online PDF to PNG/JPEG converters\n` +
+          `• Save as PNG, JPEG, or WEBP format\n\n` +
+          `Supported formats: PNG, JPEG, WEBP`
+        );
+        e.target.value = '';
+        return;
+      }
+
+      setFiles(selectedFiles);
     }
   };
 
@@ -274,7 +294,7 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
         <input
           type="file"
           multiple
-          accept=".pdf,.jpg,.jpeg,.png,.txt"
+          accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
           onChange={handleFileChange}
           className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${
             darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'

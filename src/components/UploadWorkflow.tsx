@@ -68,6 +68,25 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
+
+      // Check for PDF files
+      const pdfFiles = selectedFiles.filter(file =>
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      );
+
+      if (pdfFiles.length > 0) {
+        alert(
+          `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
+          `Please convert your PDF medical reports to images:\n` +
+          `• Take screenshots of each page\n` +
+          `• Use online PDF to PNG/JPEG converters\n` +
+          `• Save as PNG, JPEG, or WEBP format\n\n` +
+          `Supported formats: PNG, JPEG, WEBP`
+        );
+        e.target.value = ''; // Clear the input
+        return;
+      }
+
       const remainingSlots = MAX_FILES - files.length;
 
       if (selectedFiles.length > remainingSlots) {
@@ -951,8 +970,13 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     Upload Your Medical Documents
                   </h2>
                   <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                    Select your lab results, prescriptions, or medical reports. We support PDF, JPG, PNG, and text files.
+                    Select your lab results, prescriptions, or medical reports as images (PNG, JPEG, or WEBP).
                   </p>
+                  <div className="mt-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      <strong>Note:</strong> PDF files are not supported. Please convert PDFs to images or take screenshots.
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -970,14 +994,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         <span className="font-semibold">Click to upload</span> or drag and drop
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        PDF, JPG, PNG, TXT (MAX. 10MB each)
+                        PNG, JPEG, WEBP only (MAX. 10MB each)
                       </p>
                     </div>
                     <input
                       id="file-upload"
                       type="file"
                       multiple
-                      accept=".pdf,.jpg,.jpeg,.png,.txt"
+                      accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
                       onChange={handleFileChange}
                       className="hidden"
                     />
