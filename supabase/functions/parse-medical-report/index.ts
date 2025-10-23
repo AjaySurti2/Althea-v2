@@ -287,6 +287,74 @@ function validateParsedData(data: any): { isValid: boolean; issues: string[] } {
   };
 }
 
+// Validate and format date to YYYY-MM-DD or return null
+function validateDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+
+  // Already in YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // Try to parse various date formats
+  try {
+    // Remove any extra whitespace
+    dateStr = dateStr.trim();
+
+    // Try DD/MM/YYYY or DD-MM-YYYY
+    const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (ddmmyyyy) {
+      const day = ddmmyyyy[1].padStart(2, '0');
+      const month = ddmmyyyy[2].padStart(2, '0');
+      const year = ddmmyyyy[3];
+      return `${year}-${month}-${day}`;
+    }
+
+    // Try MM/DD/YYYY or MM-DD-YYYY
+    const mmddyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (mmddyyyy) {
+      const month = mmddyyyy[1].padStart(2, '0');
+      const day = mmddyyyy[2].padStart(2, '0');
+      const year = mmddyyyy[3];
+      // Assume DD/MM/YYYY is more common in medical reports
+      return `${year}-${month}-${day}`;
+    }
+
+    // Try DD Mon YYYY or DD Month YYYY
+    const monthNames: { [key: string]: string } = {
+      'jan': '01', 'january': '01',
+      'feb': '02', 'february': '02',
+      'mar': '03', 'march': '03',
+      'apr': '04', 'april': '04',
+      'may': '05',
+      'jun': '06', 'june': '06',
+      'jul': '07', 'july': '07',
+      'aug': '08', 'august': '08',
+      'sep': '09', 'sept': '09', 'september': '09',
+      'oct': '10', 'october': '10',
+      'nov': '11', 'november': '11',
+      'dec': '12', 'december': '12'
+    };
+
+    const monthPattern = dateStr.match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/i);
+    if (monthPattern) {
+      const day = monthPattern[1].padStart(2, '0');
+      const monthStr = monthPattern[2].toLowerCase();
+      const year = monthPattern[3];
+      const month = monthNames[monthStr];
+      if (month) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+
+    console.warn(`⚠️ Could not parse date: "${dateStr}"`);
+    return null;
+  } catch (error) {
+    console.warn(`⚠️ Date parsing error for "${dateStr}":`, error);
+    return null;
+  }
+}
+
 // Calculate status based on value and range
 function calculateStatus(value: string, rangeMin: string, rangeMax: string, rangeText: string): string {
   if (!value) return "PENDING";
@@ -366,7 +434,12 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
     console.log(`✅ Found existing patient: ${patientName}`);
   }
 
-  // 2. Save lab report
+  // 2. Save lab report with validated dates
+  const reportDate = validateDate(parsed.lab_details?.report_date);
+  const testDate = validateDate(parsed.lab_details?.test_date);
+
+  console.log(`📅 Dates - Report: ${reportDate}, Test: ${testDate}`);
+
   const { data: labReport, error: labReportError } = await supabase
     .from("lab_reports")
     .insert({
@@ -377,8 +450,8 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
       lab_name: parsed.lab_details?.lab_name || "Unknown Lab",
       referring_doctor: parsed.lab_details?.doctor || null,
       report_id: parsed.lab_details?.report_id || null,
-      report_date: parsed.lab_details?.report_date || null,
-      test_date: parsed.lab_details?.test_date || null,
+      report_date: reportDate,
+      test_date: testDate,
       summary: parsed.summary || null,
     })
     .select()
@@ -468,10 +541,10 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
       specialty: "",
     },
     dates: {
-      test_date: parsed.lab_details?.test_date || "",
-      report_date: parsed.lab_details?.report_date || "",
+      test_date: testDate || "",
+      report_date: reportDate || "",
     },
-    report_date: parsed.lab_details?.report_date || "",
+    report_date: reportDate || "",
     panels: parsed.panels || [],
     key_metrics,
     test_results,
