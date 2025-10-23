@@ -195,28 +195,31 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         console.log('=== Calling parse-medical-report edge function ===');
         console.log('Session ID:', session.id);
         console.log('File IDs:', uploadedFileIds);
+        console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
 
         const { data: { session: userSession } } = await supabase.auth.getSession();
         const accessToken = userSession?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
         console.log('Using access token for Edge Function:', accessToken ? 'Token found' : 'No token');
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-medical-report`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              sessionId: session.id,
-              fileIds: uploadedFileIds,
-            }),
-          }
-        );
+        const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-medical-report`;
+        console.log('Edge function URL:', edgeFunctionUrl);
+
+        const response = await fetch(edgeFunctionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            sessionId: session.id,
+            fileIds: uploadedFileIds,
+          }),
+        });
 
         console.log('Edge function response status:', response.status);
+        console.log('Edge function response ok:', response.ok);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -253,8 +256,11 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
         const errorMessage = parseError.message || 'Unknown error';
         const isApiKeyError = errorMessage.includes('OPENAI_API_KEY') || errorMessage.includes('API key');
+        const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch');
 
-        if (isApiKeyError) {
+        if (isFetchError) {
+          alert(`Network Error: Unable to reach the document parsing service.\n\nPossible causes:\n1. The OPENAI_API_KEY is not configured in Supabase Edge Functions\n2. Network connectivity issue\n3. Edge function is not deployed\n\nPlease check:\n- Supabase Dashboard → Edge Functions → parse-medical-report → Secrets\n- Add secret: OPENAI_API_KEY with your OpenAI API key\n\nError details: ${errorMessage}`);
+        } else if (isApiKeyError) {
           alert(`API Configuration Error: ${errorMessage}\n\nThe OpenAI API key needs to be configured in Supabase. Please contact your system administrator.`);
         } else {
           alert(`Document parsing failed: ${errorMessage}\n\nCheck the console for details.`);
