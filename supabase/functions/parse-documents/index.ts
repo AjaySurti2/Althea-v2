@@ -76,7 +76,6 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "cla
   try {
     console.log(`📄 Converting PDF to base64 (${arrayBuffer.byteLength} bytes)...`);
 
-    // Convert to base64 in chunks to avoid stack overflow
     const uint8Array = new Uint8Array(arrayBuffer);
     let binary = '';
     const chunkSize = 8192;
@@ -131,12 +130,18 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "cla
     const result = await response.json();
     const text = result.content?.[0]?.text || "";
 
-    if (!text || text.length < 50) {
+    if (!text || text.length < 20) {
       console.error(`⚠️ Extracted text too short: ${text.length} chars`);
-      throw new Error(`Insufficient text extracted (${text.length} chars)`);
+      console.error(`Text preview: "${text}"`);
+      throw new Error(`Insufficient text extracted (${text.length} chars) - document may be empty or corrupted`);
+    }
+
+    if (text.length < 100) {
+      console.warn(`⚠️ Warning: Extracted text is very short (${text.length} chars): "${text}"`);
     }
 
     console.log(`✅ PDF extracted with ${model}: ${text.length} chars`);
+    console.log(`Text preview: ${text.substring(0, 200)}...`);
     return text;
   } catch (error: any) {
     console.error("❌ PDF extraction error:", error.message || error);
@@ -152,7 +157,6 @@ async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, 
   }
 
   try {
-    // Convert to base64 in chunks to avoid stack overflow
     const uint8Array = new Uint8Array(arrayBuffer);
     let binary = '';
     const chunkSize = 8192;
@@ -202,12 +206,18 @@ async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, 
     const result = await response.json();
     const text = result.content?.[0]?.text || "";
 
-    if (!text || text.length < 50) {
+    if (!text || text.length < 20) {
       console.error(`⚠️ Extracted text too short: ${text.length} chars`);
-      throw new Error(`Insufficient text extracted (${text.length} chars)`);
+      console.error(`Text preview: "${text}"`);
+      throw new Error(`Insufficient text extracted (${text.length} chars) - image may be blank or unreadable`);
+    }
+
+    if (text.length < 100) {
+      console.warn(`⚠️ Warning: Extracted text is very short (${text.length} chars): "${text}"`);
     }
 
     console.log(`✅ Image OCR with ${model}: ${text.length} chars`);
+    console.log(`Text preview: ${text.substring(0, 200)}...`);
     return text;
   } catch (error: any) {
     console.error("❌ Image OCR error:", error.message || error);
@@ -252,9 +262,13 @@ async function parseWithAI(documentText: string, fileName: string, attemptNumber
     throw new Error("API key not configured");
   }
 
-  if (!documentText || documentText.length < 50) {
+  if (!documentText || documentText.length < 20) {
     console.error("❌ Insufficient text for parsing");
-    throw new Error("Insufficient text extracted");
+    throw new Error(`Insufficient text for parsing (${documentText?.length || 0} chars)`);
+  }
+
+  if (documentText.length < 100) {
+    console.warn(`⚠️ Warning: Very short text for parsing (${documentText.length} chars)`);
   }
 
   const models = [
@@ -557,10 +571,19 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        if (!documentText || documentText.length < 50) {
+        if (!documentText || documentText.length < 20) {
           console.error(`❌ Extracted text too short: ${documentText.length} chars`);
-          errors.push({ fileId, error: "Text extraction failed - insufficient content" });
+          console.error(`Text preview: "${documentText}"`);
+          errors.push({
+            fileId,
+            fileName: fileData.file_name,
+            error: `Text extraction failed - insufficient content (${documentText.length} chars). The document may be blank, corrupted, or contain only images without text.`
+          });
           continue;
+        }
+
+        if (documentText.length < 100) {
+          console.warn(`⚠️ Warning: Very short document (${documentText.length} chars)`);
         }
 
         console.log(`📝 Extracted ${documentText.length} characters`);
