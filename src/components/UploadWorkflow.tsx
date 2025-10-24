@@ -714,7 +714,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleParsedDataContinue = () => {
     setShowParsedDataReview(false);
-    setShowHealthInsights(true);
+    setCurrentStep(2); // Show Step 2: Customize
   };
 
   const handleParsedDataBack = () => {
@@ -729,7 +729,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleHealthInsightsBack = () => {
     setShowHealthInsights(false);
-    setShowParsedDataReview(true);
+    setCurrentStep(2); // Go back to Step 2: Customize
   };
 
   const handleMetricsTrackingBack = () => {
@@ -744,7 +744,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleCustomizeContinue = async () => {
     if (!sessionId) {
-      setShowDataPreview(true);
+      setShowHealthInsights(true);
       return;
     }
 
@@ -764,7 +764,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       console.error('Error updating customization:', error);
     }
 
-    setShowDataPreview(true);
+    setShowHealthInsights(true); // Show Step 3: Health Insights after customization
   };
 
   const handleDataPreviewBack = () => {
@@ -1282,7 +1282,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
                 <div className="flex justify-between">
                   <button
-                    onClick={() => setShowReview(true)}
+                    onClick={() => setShowParsedDataReview(true)}
                     className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                       darkMode
                         ? 'bg-gray-700 text-white hover:bg-gray-600'
@@ -1296,7 +1296,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     onClick={handleCustomizeContinue}
                     className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                   >
-                    <span>Next: Preview Data</span>
+                    <span>Next: Health Insights</span>
                     <ArrowRight className="w-5 h-5" />
                   </button>
                 </div>
