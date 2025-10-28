@@ -226,7 +226,7 @@ function AppContent() {
         darkMode={darkMode}
       />
 
-      <ProfileModal
+      <EnhancedProfileModal
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         darkMode={darkMode}
