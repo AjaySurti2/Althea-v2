@@ -15,7 +15,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export type Profile = {
   id: string;
   full_name: string;
+  phone: string | null;
   date_of_birth: string | null;
+  gender: string | null;
+  address: string | null;
+  avatar_url: string | null;
+  bio: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -35,7 +40,13 @@ export type FamilyMember = {
   name: string;
   relationship: string;
   date_of_birth: string | null;
+  gender: string | null;
+  age: number | null;
+  existing_conditions: string[];
+  allergies: string[];
+  medical_history_notes: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 export type Session = {

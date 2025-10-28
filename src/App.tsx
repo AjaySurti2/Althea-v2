@@ -8,9 +8,11 @@ import { Testimonials } from './components/Testimonials';
 import { FAQ } from './components/FAQ';
 import { Footer } from './components/Footer';
 import { AuthModal } from './components/AuthModal';
-import { ProfileModal } from './components/ProfileModal';
+import { EnhancedProfileModal } from './components/EnhancedProfileModal';
 import { Dashboard } from './components/Dashboard';
 import { UploadWorkflow } from './components/UploadWorkflow';
+import FamilyMembers from './components/FamilyMembers';
+import FamilyPatterns from './components/FamilyPatterns';
 
 function AppContent() {
   const { user } = useAuth();
@@ -20,6 +22,8 @@ function AppContent() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [showWorkflow, setShowWorkflow] = useState(false);
+  const [showFamilyMembers, setShowFamilyMembers] = useState(false);
+  const [showFamilyPatterns, setShowFamilyPatterns] = useState(false);
 
   useEffect(() => {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -30,17 +34,27 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (window.location.hash === '#dashboard' && user) {
-      setShowDashboard(true);
+    const hash = window.location.hash;
+    if (user) {
+      setShowDashboard(hash === '#dashboard');
+      setShowFamilyMembers(hash === '#family-members');
+      setShowFamilyPatterns(hash === '#family-patterns');
     } else {
       setShowDashboard(false);
+      setShowFamilyMembers(false);
+      setShowFamilyPatterns(false);
     }
 
     const handleHashChange = () => {
-      if (window.location.hash === '#dashboard' && user) {
-        setShowDashboard(true);
+      const hash = window.location.hash;
+      if (user) {
+        setShowDashboard(hash === '#dashboard');
+        setShowFamilyMembers(hash === '#family-members');
+        setShowFamilyPatterns(hash === '#family-patterns');
       } else {
         setShowDashboard(false);
+        setShowFamilyMembers(false);
+        setShowFamilyPatterns(false);
       }
     };
 
@@ -120,7 +134,53 @@ function AppContent() {
         <Dashboard darkMode={darkMode} />
         <Footer darkMode={darkMode} />
 
-        <ProfileModal
+        <EnhancedProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          darkMode={darkMode}
+        />
+      </div>
+    );
+  }
+
+  if (showFamilyMembers && user) {
+    return (
+      <div className={darkMode ? 'dark' : ''}>
+        <Navbar
+          darkMode={darkMode}
+          toggleDarkMode={toggleDarkMode}
+          onAuthClick={handleAuthClick}
+          onLeadClick={handleLeadClick}
+          onProfileClick={() => setProfileModalOpen(true)}
+        />
+        <FamilyMembers />
+        <Footer darkMode={darkMode} />
+
+        <EnhancedProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          darkMode={darkMode}
+        />
+      </div>
+    );
+  }
+
+  if (showFamilyPatterns && user) {
+    return (
+      <div className={darkMode ? 'dark' : ''}>
+        <Navbar
+          darkMode={darkMode}
+          toggleDarkMode={toggleDarkMode}
+          onAuthClick={handleAuthClick}
+          onLeadClick={handleLeadClick}
+          onProfileClick={() => setProfileModalOpen(true)}
+        />
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100 py-12">
+          <FamilyPatterns />
+        </div>
+        <Footer darkMode={darkMode} />
+
+        <EnhancedProfileModal
           isOpen={profileModalOpen}
           onClose={() => setProfileModalOpen(false)}
           darkMode={darkMode}

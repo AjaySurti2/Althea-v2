@@ -74,6 +74,15 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
                   Dashboard
                 </button>
 
+                <button
+                  onClick={() => window.location.href = '#family-members'}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Family
+                </button>
+
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
