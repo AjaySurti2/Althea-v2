@@ -13,8 +13,6 @@ import { Dashboard } from './components/Dashboard';
 import { UploadWorkflow } from './components/UploadWorkflow';
 import FamilyMembers from './components/FamilyMembers';
 import FamilyPatterns from './components/FamilyPatterns';
-import { ForgotPassword } from './components/ForgotPassword';
-import { ResetPassword } from './components/ResetPassword';
 
 function AppContent() {
   const { user } = useAuth();
@@ -26,8 +24,6 @@ function AppContent() {
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [showFamilyMembers, setShowFamilyMembers] = useState(false);
   const [showFamilyPatterns, setShowFamilyPatterns] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -39,34 +35,10 @@ function AppContent() {
 
   useEffect(() => {
     const hash = window.location.hash;
-    const hashParams = new URLSearchParams(hash.substring(hash.indexOf('?') !== -1 ? hash.indexOf('?') : hash.length));
-
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
-
-    if (accessToken && type === 'recovery') {
-      window.location.hash = '#reset-password';
-      setShowResetPassword(true);
-      return;
-    }
-
-    const errorParam = hashParams.get('error');
-    if (errorParam === 'access_denied') {
-      const errorDescription = hashParams.get('error_description');
-      console.error('Password reset error:', errorDescription);
-      window.location.hash = '#forgot-password';
-      setShowForgotPassword(true);
-      return;
-    }
-
-    const baseHash = hash.split('?')[0];
-    setShowForgotPassword(baseHash === '#forgot-password');
-    setShowResetPassword(baseHash === '#reset-password');
-
     if (user) {
-      setShowDashboard(baseHash === '#dashboard');
-      setShowFamilyMembers(baseHash === '#family-members');
-      setShowFamilyPatterns(baseHash === '#family-patterns');
+      setShowDashboard(hash === '#dashboard');
+      setShowFamilyMembers(hash === '#family-members');
+      setShowFamilyPatterns(hash === '#family-patterns');
     } else {
       setShowDashboard(false);
       setShowFamilyMembers(false);
@@ -75,34 +47,10 @@ function AppContent() {
 
     const handleHashChange = () => {
       const hash = window.location.hash;
-      const hashParams = new URLSearchParams(hash.substring(hash.indexOf('?') !== -1 ? hash.indexOf('?') : hash.length));
-
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
-
-      if (accessToken && type === 'recovery') {
-        window.location.hash = '#reset-password';
-        setShowResetPassword(true);
-        return;
-      }
-
-      const errorParam = hashParams.get('error');
-      if (errorParam === 'access_denied') {
-        const errorDescription = hashParams.get('error_description');
-        console.error('Password reset error:', errorDescription);
-        window.location.hash = '#forgot-password';
-        setShowForgotPassword(true);
-        return;
-      }
-
-      const baseHash = hash.split('?')[0];
-      setShowForgotPassword(baseHash === '#forgot-password');
-      setShowResetPassword(baseHash === '#reset-password');
-
       if (user) {
-        setShowDashboard(baseHash === '#dashboard');
-        setShowFamilyMembers(baseHash === '#family-members');
-        setShowFamilyPatterns(baseHash === '#family-patterns');
+        setShowDashboard(hash === '#dashboard');
+        setShowFamilyMembers(hash === '#family-members');
+        setShowFamilyPatterns(hash === '#family-patterns');
       } else {
         setShowDashboard(false);
         setShowFamilyMembers(false);
@@ -160,34 +108,6 @@ function AppContent() {
   const handleWorkflowComplete = () => {
     setShowWorkflow(false);
   };
-
-  if (showForgotPassword) {
-    return (
-      <div className={darkMode ? 'dark' : ''}>
-        <ForgotPassword
-          darkMode={darkMode}
-          onBackToLogin={() => {
-            window.location.href = '/';
-            setAuthMode('signin');
-            setAuthModalOpen(true);
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (showResetPassword) {
-    return (
-      <div className={darkMode ? 'dark' : ''}>
-        <ResetPassword
-          darkMode={darkMode}
-          onSuccess={() => {
-            window.location.href = '#dashboard';
-          }}
-        />
-      </div>
-    );
-  }
 
   if (showWorkflow && user) {
     return (
@@ -306,7 +226,7 @@ function AppContent() {
         darkMode={darkMode}
       />
 
-      <EnhancedProfileModal
+      <ProfileModal
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         darkMode={darkMode}

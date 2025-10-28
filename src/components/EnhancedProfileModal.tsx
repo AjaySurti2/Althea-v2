@@ -7,14 +7,13 @@ interface EnhancedProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   darkMode: boolean;
-  defaultTab?: 'profile' | 'password';
 }
 
 const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
-export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOpen, onClose, darkMode, defaultTab = 'profile' }) => {
+export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOpen, onClose, darkMode }) => {
   const { user, profile, refreshProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -42,11 +41,10 @@ export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOp
         gender: profile.gender || '',
         address: profile.address || '',
       });
-      setActiveTab(defaultTab);
       setError('');
       setSuccess('');
     }
-  }, [isOpen, profile, defaultTab]);
+  }, [isOpen, profile]);
 
   if (!isOpen || !user) return null;
 
