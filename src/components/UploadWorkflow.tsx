@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye, Trash2 } from 'lucide-react';
+import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye, Trash2, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DocumentReview } from './DocumentReview';
@@ -7,6 +7,7 @@ import { DataPreview } from './DataPreview';
 import { ParsedDataReview } from './ParsedDataReview';
 import { HealthInsights } from './HealthInsights';
 import { MetricsTracking } from './MetricsTracking';
+import { FamilyDetailsCapture } from './FamilyDetailsCapture';
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -16,7 +17,7 @@ interface UploadWorkflowProps {
 
 export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComplete, onCancel }) => {
   const { user } = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [showReview, setShowReview] = useState(false);
   const [showParsedDataReview, setShowParsedDataReview] = useState(false);
   const [showDataPreview, setShowDataPreview] = useState(false);
@@ -30,6 +31,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [languageLevel, setLanguageLevel] = useState<'simple' | 'moderate' | 'technical'>('simple');
   const [processing, setProcessing] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [selectedFamilyMemberId, setSelectedFamilyMemberId] = useState<string | null>(null);
   const [, setUploadComplete] = useState(false);
   const MAX_FILES = 5;
 
@@ -141,10 +143,11 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
     setProcessing(true);
     try {
-      const { data: session, error: sessionError } = await supabase
+      const { data: session, error: sessionError} = await supabase
         .from('sessions')
         .insert({
           user_id: user.id,
+          family_member_id: selectedFamilyMemberId,
           tone,
           language_level: languageLevel,
           status: 'pending',
@@ -964,6 +967,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const progressPercentage = (currentStep / 5) * 100;
 
   const steps = [
+    { number: 0, icon: Users, label: 'Family Details' },
     { number: 1, icon: Upload, label: 'Upload' },
     { number: 2, icon: Sliders, label: 'Customize' },
     { number: 3, icon: Eye, label: 'Preview' },
@@ -981,7 +985,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 Upload Health Report
               </h1>
               <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Step {currentStep} of 5
+                Step {currentStep + 1} of 6
               </p>
             </div>
             <button
@@ -1061,6 +1065,31 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           </div>
 
           <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            {currentStep === 0 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Family Member Details
+                  </h2>
+                  <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                    Associate this health report with a family member for better tracking and analysis.
+                  </p>
+                </div>
+
+                <FamilyDetailsCapture
+                  darkMode={darkMode}
+                  onContinue={(memberId) => {
+                    setSelectedFamilyMemberId(memberId);
+                    setCurrentStep(1);
+                  }}
+                  onSkip={() => {
+                    setSelectedFamilyMemberId(null);
+                    setCurrentStep(1);
+                  }}
+                />
+              </div>
+            )}
+
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div>
