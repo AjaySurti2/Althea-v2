@@ -39,14 +39,34 @@ function AppContent() {
 
   useEffect(() => {
     const hash = window.location.hash;
+    const hashParams = new URLSearchParams(hash.substring(hash.indexOf('?') !== -1 ? hash.indexOf('?') : hash.length));
 
-    setShowForgotPassword(hash === '#forgot-password');
-    setShowResetPassword(hash === '#reset-password');
+    const accessToken = hashParams.get('access_token');
+    const type = hashParams.get('type');
+
+    if (accessToken && type === 'recovery') {
+      window.location.hash = '#reset-password';
+      setShowResetPassword(true);
+      return;
+    }
+
+    const errorParam = hashParams.get('error');
+    if (errorParam === 'access_denied') {
+      const errorDescription = hashParams.get('error_description');
+      console.error('Password reset error:', errorDescription);
+      window.location.hash = '#forgot-password';
+      setShowForgotPassword(true);
+      return;
+    }
+
+    const baseHash = hash.split('?')[0];
+    setShowForgotPassword(baseHash === '#forgot-password');
+    setShowResetPassword(baseHash === '#reset-password');
 
     if (user) {
-      setShowDashboard(hash === '#dashboard');
-      setShowFamilyMembers(hash === '#family-members');
-      setShowFamilyPatterns(hash === '#family-patterns');
+      setShowDashboard(baseHash === '#dashboard');
+      setShowFamilyMembers(baseHash === '#family-members');
+      setShowFamilyPatterns(baseHash === '#family-patterns');
     } else {
       setShowDashboard(false);
       setShowFamilyMembers(false);
@@ -55,14 +75,34 @@ function AppContent() {
 
     const handleHashChange = () => {
       const hash = window.location.hash;
+      const hashParams = new URLSearchParams(hash.substring(hash.indexOf('?') !== -1 ? hash.indexOf('?') : hash.length));
 
-      setShowForgotPassword(hash === '#forgot-password');
-      setShowResetPassword(hash === '#reset-password');
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+
+      if (accessToken && type === 'recovery') {
+        window.location.hash = '#reset-password';
+        setShowResetPassword(true);
+        return;
+      }
+
+      const errorParam = hashParams.get('error');
+      if (errorParam === 'access_denied') {
+        const errorDescription = hashParams.get('error_description');
+        console.error('Password reset error:', errorDescription);
+        window.location.hash = '#forgot-password';
+        setShowForgotPassword(true);
+        return;
+      }
+
+      const baseHash = hash.split('?')[0];
+      setShowForgotPassword(baseHash === '#forgot-password');
+      setShowResetPassword(baseHash === '#reset-password');
 
       if (user) {
-        setShowDashboard(hash === '#dashboard');
-        setShowFamilyMembers(hash === '#family-members');
-        setShowFamilyPatterns(hash === '#family-patterns');
+        setShowDashboard(baseHash === '#dashboard');
+        setShowFamilyMembers(baseHash === '#family-members');
+        setShowFamilyPatterns(baseHash === '#family-patterns');
       } else {
         setShowDashboard(false);
         setShowFamilyMembers(false);

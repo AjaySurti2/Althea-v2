@@ -23,6 +23,25 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ darkMode, onSucces
   useEffect(() => {
     const checkToken = async () => {
       setVerifying(true);
+
+      const hash = window.location.hash;
+      const hashParams = new URLSearchParams(hash.substring(hash.indexOf('?') !== -1 ? hash.indexOf('?') : hash.length));
+      const errorParam = hashParams.get('error');
+
+      if (errorParam === 'access_denied') {
+        const errorCode = hashParams.get('error_code');
+        const errorDescription = hashParams.get('error_description');
+
+        if (errorCode === 'otp_expired') {
+          setError('This password reset link has expired. Reset links are only valid for 1 hour. Please request a new one.');
+        } else {
+          setError(errorDescription || 'Invalid or expired reset link. Please request a new password reset.');
+        }
+        setTokenValid(false);
+        setVerifying(false);
+        return;
+      }
+
       const { isValid, error: verifyError } = await verifyResetToken();
 
       if (verifyError || !isValid) {

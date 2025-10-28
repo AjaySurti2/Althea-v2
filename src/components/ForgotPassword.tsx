@@ -95,13 +95,14 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ darkMode, onBack
                 darkMode ? 'border-gray-600' : 'border-blue-200'
               }`}>
                 <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-blue-900'}`}>
-                  <strong>Didn't receive the email?</strong>
+                  <strong>Important:</strong>
                 </p>
                 <ul className={`text-sm mt-2 space-y-1 ${darkMode ? 'text-gray-400' : 'text-blue-800'}`}>
+                  <li>• The reset link expires in 1 hour for security</li>
                   <li>• Check your spam or junk folder</li>
                   <li>• Make sure you entered the correct email</li>
-                  <li>• Wait a few minutes and try again</li>
-                  <li>• The link expires in 1 hour</li>
+                  <li>• You can request another link if needed</li>
+                  <li>• Click the link immediately after receiving it</li>
                 </ul>
               </div>
 
