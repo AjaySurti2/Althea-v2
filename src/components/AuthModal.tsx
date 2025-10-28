@@ -194,6 +194,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
             </button>
           </form>
 
+          {mode === 'signin' && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => {
+                  onClose();
+                  window.location.href = '#forgot-password';
+                }}
+                className="text-sm text-green-500 hover:text-green-600 font-medium"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+
           {mode !== 'lead' && (
             <div className="mt-6 text-center">
               <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
