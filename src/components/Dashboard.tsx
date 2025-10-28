@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, TrendingUp, Users, Calendar } from 'lucide-react';
+import { Upload, FileText, TrendingUp, Users, Calendar, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Session, HealthMetric, FamilyPattern, Reminder } from '../lib/supabase';
 import { TotalReports } from './TotalReports';
+import { EnhancedProfileModal } from './EnhancedProfileModal';
 
 interface DashboardProps {
   darkMode: boolean;
@@ -10,7 +11,9 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
   const { user, profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'upload' | 'reports' | 'history' | 'patterns' | 'reminders'>('reports');
+  const [activeTab, setActiveTab] = useState<'upload' | 'reports' | 'history' | 'patterns' | 'reminders' | 'settings'>('reports');
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileModalTab, setProfileModalTab] = useState<'profile' | 'password'>('profile');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [metrics, setMetrics] = useState<HealthMetric[]>([]);
   const [patterns, setPatterns] = useState<FamilyPattern[]>([]);
@@ -49,6 +52,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
     { id: 'history' as const, label: 'Health History', icon: TrendingUp },
     { id: 'patterns' as const, label: 'Family Patterns', icon: Users },
     { id: 'reminders' as const, label: 'Reminders', icon: Calendar },
+    { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
 
   if (loading) {
@@ -155,8 +159,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
             {activeTab === 'history' && <HistoryTab darkMode={darkMode} sessions={sessions} metrics={metrics} />}
             {activeTab === 'patterns' && <PatternsTab darkMode={darkMode} patterns={patterns} />}
             {activeTab === 'reminders' && <RemindersTab darkMode={darkMode} reminders={reminders} onUpdate={loadDashboardData} />}
+            {activeTab === 'settings' && (
+              <SettingsTab
+                darkMode={darkMode}
+                onEditProfile={() => {
+                  setProfileModalTab('profile');
+                  setProfileModalOpen(true);
+                }}
+                onChangePassword={() => {
+                  setProfileModalTab('password');
+                  setProfileModalOpen(true);
+                }}
+              />
+            )}
           </div>
         </div>
+
+        <EnhancedProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          darkMode={darkMode}
+          defaultTab={profileModalTab}
+        />
       </div>
     </section>
   );
@@ -492,6 +516,187 @@ const RemindersTab: React.FC<{ darkMode: boolean; reminders: Reminder[]; onUpdat
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const SettingsTab: React.FC<{
+  darkMode: boolean;
+  onEditProfile: () => void;
+  onChangePassword: () => void;
+}> = ({ darkMode, onEditProfile, onChangePassword }) => {
+  const { user, profile } = useAuth();
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className={`text-2xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          Account Settings
+        </h2>
+        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          Manage your account information and security settings
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${
+          darkMode ? 'border-gray-700' : 'border-gray-200'
+        }`}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Profile Information
+              </h3>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Update your personal details
+              </p>
+            </div>
+          </div>
+
+          <div className={`space-y-3 mb-6 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            <div>
+              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Name:
+              </span>
+              <p className="font-medium">{profile?.full_name || 'Not set'}</p>
+            </div>
+            <div>
+              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Email:
+              </span>
+              <p className="font-medium">{user?.email}</p>
+            </div>
+            <div>
+              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Phone:
+              </span>
+              <p className="font-medium">{profile?.phone || 'Not set'}</p>
+            </div>
+            <div>
+              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Date of Birth:
+              </span>
+              <p className="font-medium">
+                {profile?.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString() : 'Not set'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onEditProfile}
+            className="w-full py-3 px-4 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+          >
+            <Users className="w-5 h-5" />
+            Edit Profile
+          </button>
+        </div>
+
+        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${
+          darkMode ? 'border-gray-700' : 'border-gray-200'
+        }`}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Security
+              </h3>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Manage your password and security
+              </p>
+            </div>
+          </div>
+
+          <div className={`space-y-4 mb-6`}>
+            <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Password
+                </span>
+              </div>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Last changed: {new Date(user?.updated_at || '').toLocaleDateString()}
+              </p>
+            </div>
+
+            <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className={`w-5 h-5 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Two-Factor Authentication
+                </span>
+              </div>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Coming soon
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onChangePassword}
+            className="w-full py-3 px-4 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+          >
+            <FileText className="w-5 h-5" />
+            Change Password
+          </button>
+        </div>
+      </div>
+
+      <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${
+        darkMode ? 'border-gray-700' : 'border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          Account Activity
+        </h3>
+        <div className={`space-y-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          <div className="flex justify-between items-center">
+            <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Account created:
+            </span>
+            <span className="font-medium">
+              {new Date(user?.created_at || '').toLocaleDateString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Last sign in:
+            </span>
+            <span className="font-medium">
+              {user?.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString() : 'N/A'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Email verified:
+            </span>
+            <span className={`font-medium ${user?.email_confirmed_at ? 'text-green-500' : 'text-yellow-500'}`}>
+              {user?.email_confirmed_at ? 'Yes' : 'Pending'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className={`p-6 rounded-xl ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${
+        darkMode ? 'border-red-800' : 'border-red-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-red-400' : 'text-red-900'}`}>
+          Danger Zone
+        </h3>
+        <p className={`text-sm mb-4 ${darkMode ? 'text-red-300' : 'text-red-800'}`}>
+          Permanently delete your account and all associated data. This action cannot be undone.
+        </p>
+        <button
+          onClick={() => alert('Account deletion feature coming soon. Please contact support for assistance.')}
+          className="py-2 px-4 border-2 border-red-500 text-red-500 rounded-lg font-medium hover:bg-red-500 hover:text-white transition-colors"
+        >
+          Delete Account
+        </button>
+      </div>
     </div>
   );
 };
