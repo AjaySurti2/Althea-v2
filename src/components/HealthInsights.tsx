@@ -156,6 +156,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
+      console.log('Generating report for session:', sessionId);
+
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -163,36 +165,49 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ sessionId })
+        body: JSON.stringify({
+          sessionId,
+          reportType: 'comprehensive',
+          includeQuestions: true
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Report generation failed:', errorData);
         throw new Error(errorData.error || 'Failed to generate report');
       }
 
       const result = await response.json();
+      console.log('Report generated successfully:', result);
 
-      // Download the generated PDF
-      if (result.downloadUrl) {
-        const { data: { session: downloadSession } } = await supabase.auth.getSession();
-        const downloadResponse = await fetch(result.downloadUrl, {
-          headers: {
-            'Authorization': `Bearer ${downloadSession?.access_token}`,
-          },
-        });
+      // Download the generated HTML report
+      if (result.storage_path) {
+        // Download from Supabase Storage
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from('health-reports')
+          .download(result.storage_path);
 
-        if (downloadResponse.ok) {
-          const blob = await downloadResponse.blob();
-          const url = window.URL.createObjectURL(blob);
+        if (downloadError) {
+          console.error('Download error:', downloadError);
+          throw new Error('Failed to download report: ' + downloadError.message);
+        }
+
+        if (fileData) {
+          // Create download link
+          const url = window.URL.createObjectURL(fileData);
           const a = document.createElement('a');
           a.href = url;
-          a.download = result.fileName || 'health-report.pdf';
+          a.download = `health-report-${sessionId}.html`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
+
+          console.log('Report downloaded successfully');
         }
+      } else {
+        throw new Error('No storage path returned from report generation');
       }
     } catch (err: any) {
       console.error('Error generating report:', err);
