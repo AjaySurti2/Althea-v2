@@ -59,14 +59,22 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
     setLoading(true);
     setError('');
     try {
-      const data = await getFamilyMembers();
-      setMembers(data);
+      const { data, error } = await getFamilyMembers();
 
-      if (data.length === 0) {
+      if (error) {
+        setError(error.message);
+        setMembers([]);
+        return;
+      }
+
+      setMembers(data || []);
+
+      if (!data || data.length === 0) {
         setShowAddForm(true);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load family members');
+      setMembers([]);
     } finally {
       setLoading(false);
     }
@@ -140,8 +148,15 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
         age: formData.date_of_birth ? calculateAge(formData.date_of_birth) : formData.age,
       };
 
-      const newMember = await createFamilyMember(memberData);
+      const { data: newMember, error: createError } = await createFamilyMember(memberData);
+
+      if (createError || !newMember) {
+        setError(createError?.message || 'Failed to add family member');
+        return;
+      }
+
       setMembers([...members, newMember]);
+      setSelectedMemberId(newMember.id);
       setSuccess('Family member added successfully!');
       setShowAddForm(false);
       setFormData({
