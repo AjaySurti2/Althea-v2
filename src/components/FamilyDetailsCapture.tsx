@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, X, AlertCircle, CheckCircle, Calendar, Heart, Loader2, Info } from 'lucide-react';
+import { Users, Plus, X, AlertCircle, CheckCircle, Calendar, Heart, Loader2, Info, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getFamilyMembers, createFamilyMember, CreateFamilyMemberInput } from '../lib/familyApi';
 import { FamilyMember } from '../lib/supabase';
@@ -187,27 +187,39 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className={`p-6 rounded-xl ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'} border ${
-        darkMode ? 'border-blue-800' : 'border-blue-200'
+      <div className={`p-6 rounded-xl ${darkMode ? 'bg-emerald-900/20' : 'bg-emerald-50'} border-2 ${
+        darkMode ? 'border-emerald-800' : 'border-emerald-200'
       }`}>
         <div className="flex items-start gap-3">
-          <Info className={`w-6 h-6 flex-shrink-0 mt-0.5 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-          <div>
-            <h3 className={`font-semibold mb-2 ${darkMode ? 'text-blue-200' : 'text-blue-900'}`}>
-              Why Family Details Matter
+          <Users className={`w-7 h-7 flex-shrink-0 mt-0.5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+          <div className="flex-1">
+            <h3 className={`text-lg font-bold mb-2 ${darkMode ? 'text-emerald-200' : 'text-emerald-900'}`}>
+              Step 1: Associate Health Report with Family Member
             </h3>
-            <p className={`text-sm ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>
-              Adding family member information helps us:
+            <p className={`text-sm mb-3 ${darkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
+              To provide the most accurate and personalized health insights, please select or add the family member this report belongs to.
             </p>
-            <ul className={`text-sm mt-2 space-y-1 ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>
-              <li>• Organize health records by family member</li>
-              <li>• Identify hereditary health patterns and genetic risks</li>
-              <li>• Provide personalized insights based on age and medical history</li>
-              <li>• Track family health trends over time</li>
-            </ul>
-            <p className={`text-sm mt-3 font-medium ${darkMode ? 'text-blue-200' : 'text-blue-900'}`}>
-              You can add members now or skip and organize later.
-            </p>
+            <div className={`p-3 rounded-lg ${darkMode ? 'bg-emerald-950/50' : 'bg-white/80'}`}>
+              <p className={`text-sm font-semibold mb-2 ${darkMode ? 'text-emerald-200' : 'text-emerald-900'}`}>
+                Benefits of linking to family members:
+              </p>
+              <ul className={`text-sm space-y-1 ${darkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
+                <li>• <strong>Organized records</strong> - Keep each person's health data separate</li>
+                <li>• <strong>Personalized insights</strong> - Age and gender-specific recommendations</li>
+                <li>• <strong>Family patterns</strong> - Detect hereditary health risks</li>
+                <li>• <strong>Trend tracking</strong> - Monitor health changes over time</li>
+              </ul>
+            </div>
+            {members.length === 0 && (
+              <p className={`text-sm mt-3 font-medium ${darkMode ? 'text-emerald-200' : 'text-emerald-900'}`}>
+                👇 Start by adding your first family member below
+              </p>
+            )}
+            {members.length > 0 && (
+              <p className={`text-sm mt-3 font-medium ${darkMode ? 'text-emerald-200' : 'text-emerald-900'}`}>
+                👇 Select a family member below or add a new one
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -230,22 +242,44 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
         </div>
       )}
 
-      {members.length > 0 && !showAddForm && (
+      {!showAddForm && (
         <div>
           <div className="flex items-center justify-between mb-4">
             <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Select Family Member (Optional)
+              {members.length > 0 ? 'Select Family Member' : 'Add Your First Family Member'}
             </h3>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Add Member
-            </button>
+            {members.length > 0 && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Member
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {members.length === 0 ? (
+            <div className={`p-8 rounded-xl border-2 border-dashed text-center ${
+              darkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-300 bg-gray-50'
+            }`}>
+              <Users className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+              <h4 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                No Family Members Yet
+              </h4>
+              <p className={`text-sm mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Add your first family member to start organizing health reports and tracking family health patterns.
+              </p>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors font-medium"
+              >
+                <Plus className="w-5 h-5" />
+                Add First Member
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {members.map((member) => (
               <div
                 key={member.id}
@@ -301,7 +335,8 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
                 )}
               </div>
             ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -571,24 +606,66 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
       )}
 
       {!showAddForm && (
-        <div className="flex gap-3 pt-4">
-          <button
-            onClick={handleContinue}
-            className="flex-1 py-3 px-6 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
-          >
-            Continue with {selectedMemberId ? 'Selected Member' : 'Upload'}
-            <CheckCircle className="w-5 h-5" />
-          </button>
-          <button
-            onClick={onSkip}
-            className={`px-6 py-3 rounded-lg font-medium ${
-              darkMode
-                ? 'bg-gray-700 text-white hover:bg-gray-600'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Skip for Now
-          </button>
+        <div className="space-y-4 pt-4">
+          {selectedMemberId && members.length > 0 && (
+            <div className={`p-4 rounded-lg border-2 ${
+              darkMode ? 'bg-emerald-900/30 border-emerald-700' : 'bg-emerald-50 border-emerald-300'
+            }`}>
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-6 h-6 text-emerald-500 flex-shrink-0" />
+                <div>
+                  <p className={`text-sm font-medium ${darkMode ? 'text-emerald-200' : 'text-emerald-900'}`}>
+                    Selected Family Member:
+                  </p>
+                  <p className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {members.find(m => m.id === selectedMemberId)?.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleContinue}
+              disabled={members.length > 0 && !selectedMemberId}
+              className={`flex-1 py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                members.length > 0 && !selectedMemberId
+                  ? darkMode
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-emerald-500 text-white hover:bg-emerald-600'
+              }`}
+            >
+              {members.length > 0 && !selectedMemberId ? (
+                <>
+                  Select a Member to Continue
+                  <AlertCircle className="w-5 h-5" />
+                </>
+              ) : (
+                <>
+                  Continue to Upload
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+            <button
+              onClick={onSkip}
+              className={`px-6 py-3 rounded-lg font-medium border-2 ${
+                darkMode
+                  ? 'border-gray-700 text-gray-400 hover:bg-gray-800 hover:border-gray-600'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400'
+              }`}
+            >
+              Skip for Now
+            </button>
+          </div>
+
+          {members.length > 0 && !selectedMemberId && (
+            <p className={`text-sm text-center ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              💡 Tip: Select a family member above to enable personalized health insights
+            </p>
+          )}
         </div>
       )}
     </div>
