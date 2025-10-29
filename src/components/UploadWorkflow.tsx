@@ -964,7 +964,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     );
   }
 
-  const progressPercentage = (currentStep / 5) * 100;
+  const progressPercentage = (currentStep / 5) * 100; // 5 is the max step number (0-5 = 6 steps)
 
   const steps = [
     { number: 0, icon: Users, label: 'Family Details' },
@@ -979,7 +979,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <div className="min-h-screen px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
+          <div className={`sticky top-0 z-20 py-6 mb-2 flex items-center justify-between ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
             <div>
               <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Upload Health Report
@@ -1016,7 +1016,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             </div>
           )}
 
-          <div className="mb-8">
+          <div className={`sticky top-0 z-10 pb-6 mb-2 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
             <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
               <div
                 className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-500"
