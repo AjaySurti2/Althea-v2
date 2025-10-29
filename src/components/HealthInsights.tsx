@@ -5,7 +5,6 @@ import {
   Lightbulb, FileText, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { ReportManager } from './ReportManager';
 
 interface HealthInsightsProps {
   sessionId: string;
@@ -56,7 +55,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [tone, setTone] = useState('conversational');
   const [languageLevel, setLanguageLevel] = useState('simple_terms');
-  const [showReportManager, setShowReportManager] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   useEffect(() => {
     loadInsights();
@@ -147,6 +146,60 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
   const handleRegenerate = async () => {
     await generateInsights();
+  };
+
+  const handleGenerateReport = async () => {
+    try {
+      setGeneratingReport(true);
+      setError(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate report');
+      }
+
+      const result = await response.json();
+
+      // Download the generated PDF
+      if (result.downloadUrl) {
+        const { data: { session: downloadSession } } = await supabase.auth.getSession();
+        const downloadResponse = await fetch(result.downloadUrl, {
+          headers: {
+            'Authorization': `Bearer ${downloadSession?.access_token}`,
+          },
+        });
+
+        if (downloadResponse.ok) {
+          const blob = await downloadResponse.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = result.fileName || 'health-report.pdf';
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error generating report:', err);
+      setError(err.message);
+    } finally {
+      setGeneratingReport(false);
+    }
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -477,28 +530,36 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setShowReportManager(!showReportManager)}
-            className="flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all bg-gray-800 text-white hover:bg-gray-700 border border-gray-600"
+            onClick={handleGenerateReport}
+            disabled={generatingReport}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+              generatingReport
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
+            }`}
           >
-            <FileText className="w-5 h-5" />
-            <span>Generate Report</span>
+            {generatingReport ? (
+              <>
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                <span>Generate & Download Report</span>
+              </>
+            )}
           </button>
 
           <button
             onClick={onContinue}
             className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
           >
-            <span>View Tracking & Download</span>
+            <span>View Tracking</span>
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       </div>
-
-      {showReportManager && (
-        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <ReportManager sessionId={sessionId} darkMode={darkMode} onClose={() => setShowReportManager(false)} />
-        </div>
-      )}
     </div>
   );
 };
