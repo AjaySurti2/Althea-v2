@@ -219,7 +219,7 @@ async function generateHTMLReport(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Health Report - ${reportMetadata.reportId}</title>
+  <title>Althea Health Report - ${reportMetadata.reportId}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -230,6 +230,63 @@ async function generateHTMLReport(
       padding: 40px;
       max-width: 1000px;
       margin: 0 auto;
+    }
+    .brand-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding: 20px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+      border-radius: 12px;
+      border: 2px solid #10b981;
+    }
+    .brand-logo-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .brand-logo {
+      width: 60px;
+      height: 60px;
+      background: #10b981;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 24px;
+      box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+    }
+    .brand-name-section {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-name {
+      font-size: 28px;
+      font-weight: bold;
+      color: #10b981;
+      letter-spacing: -0.5px;
+    }
+    .brand-tagline {
+      font-size: 13px;
+      color: #059669;
+      font-style: italic;
+    }
+    .report-title {
+      text-align: right;
+      color: #6b7280;
+    }
+    .report-title h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    .report-title p {
+      font-size: 12px;
+      color: #6b7280;
     }
     .header {
       border-bottom: 4px solid #10b981;
@@ -388,11 +445,25 @@ async function generateHTMLReport(
   </style>
 </head>
 <body>
+  <div class="brand-header">
+    <div class="brand-logo-section">
+      <div class="brand-logo">A</div>
+      <div class="brand-name-section">
+        <div class="brand-name">Althea</div>
+        <div class="brand-tagline">Your Personal Health Interpreter</div>
+      </div>
+    </div>
+    <div class="report-title">
+      <h2>Comprehensive Health Report</h2>
+      <p>Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    </div>
+  </div>
+
   <div class="header">
-    <h1>Comprehensive Health Report</h1>
+    <h1>Patient Health Summary</h1>
     <div class="metadata">
       <div><strong>Patient:</strong> ${patient?.name || 'N/A'}</div>
-      <div><strong>Report ID:</strong> ${reportMetadata.reportId}</div>
+      <div><strong>Report ID:</strong> ${reportMetadata.reportId.substring(0, 8)}</div>
       <div><strong>Generated:</strong> ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
       <div><strong>Version:</strong> ${reportMetadata.version}</div>
     </div>
@@ -551,8 +622,9 @@ async function generateHTMLReport(
   </div>
 
   <div class="footer">
-    <p>Althea Health Report System | Generated on ${new Date().toLocaleString()}</p>
-    <p>Report ID: ${reportMetadata.reportId} | Version: ${reportMetadata.version}</p>
+    <p><strong>Althea</strong> - Your Personal Health Interpreter | Generated on ${new Date().toLocaleString()}</p>
+    <p>Report ID: ${reportMetadata.reportId.substring(0, 8)} | Version: ${reportMetadata.version}</p>
+    <p style="margin-top: 8px; font-size: 11px;">This report is confidential and intended solely for the patient named above.</p>
   </div>
 </body>
 </html>`;

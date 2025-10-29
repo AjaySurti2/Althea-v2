@@ -23,6 +23,16 @@ interface TotalReportsProps {
   darkMode: boolean;
 }
 
+interface GeneratedReport {
+  id: string;
+  report_type: string;
+  report_version: number;
+  report_data: any;
+  storage_path: string;
+  generated_at: string;
+  file_size: number;
+}
+
 export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<any[]>([]);
@@ -32,6 +42,9 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'file' | 'session'; id: string } | null>(null);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
+  const [viewingGeneratedReport, setViewingGeneratedReport] = useState<GeneratedReport | null>(null);
+  const [generatingReport, setGeneratingReport] = useState<string | null>(null);
+  const [reportPreviewHtml, setReportPreviewHtml] = useState<string | null>(null);
 
   useEffect(() => {
     loadSessions();
@@ -69,7 +82,18 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
       if (parsedError) throw parsedError;
 
-      // Group files and parsed data by session
+      // Load generated health reports
+      const { data: healthReports, error: reportsError } = await supabase
+        .from('health_reports')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('generated_at', { ascending: false });
+
+      if (reportsError) {
+        console.warn('Error loading health reports:', reportsError);
+      }
+
+      // Group files, parsed data, and generated reports by session
       const processedSessions = sessionsData?.map(session => ({
         ...session,
         files: filesData?.filter((f: any) =>
@@ -77,6 +101,9 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         ) || [],
         parsedReports: parsedData?.filter((p: any) =>
           p.session_id === session.id
+        ) || [],
+        generatedReports: healthReports?.filter((r: any) =>
+          r.session_id === session.id
         ) || []
       })) || [];
 
@@ -190,6 +217,101 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       }
     } catch (error: any) {
       alert(`Failed to download: ${error.message}`);
+    }
+  };
+
+  const handleGenerateReport = async (sessionId: string) => {
+    try {
+      setGeneratingReport(sessionId);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          reportType: 'comprehensive',
+          includeQuestions: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate report');
+      }
+
+      const result = await response.json();
+      console.log('Report generated successfully:', result);
+
+      // Reload sessions to show the new report
+      await loadSessions();
+      alert('Health report generated successfully!');
+    } catch (error: any) {
+      console.error('Error generating report:', error);
+      alert(`Failed to generate report: ${error.message}`);
+    } finally {
+      setGeneratingReport(null);
+    }
+  };
+
+  const handleViewGeneratedReport = async (report: GeneratedReport) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('health-reports')
+        .download(report.storage_path);
+
+      if (error) throw error;
+
+      const htmlContent = await data.text();
+      setReportPreviewHtml(htmlContent);
+      setViewingGeneratedReport(report);
+
+      // Log view access
+      await supabase.from('report_access_log').insert({
+        report_id: report.id,
+        user_id: user?.id,
+        action: 'viewed'
+      });
+    } catch (error: any) {
+      console.error('Error viewing report:', error);
+      alert(`Failed to view report: ${error.message}`);
+    }
+  };
+
+  const handleDownloadGeneratedReport = async (report: GeneratedReport) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('health-reports')
+        .download(report.storage_path);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `althea-health-report-${report.id.substring(0, 8)}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Log download access
+      await supabase.from('report_access_log').insert({
+        report_id: report.id,
+        user_id: user?.id,
+        action: 'downloaded'
+      });
+
+      alert('Report downloaded successfully!');
+    } catch (error: any) {
+      console.error('Error downloading report:', error);
+      alert(`Failed to download report: ${error.message}`);
     }
   };
 
@@ -726,10 +848,194 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                       </div>
                     </div>
                   )}
+
+                  {/* Generated Reports Section */}
+                  {session.generatedReports && session.generatedReports.length > 0 && (
+                    <div className={`px-4 py-3 border-t ${
+                      darkMode ? 'border-gray-700' : 'border-gray-200'
+                    }`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className={`text-sm font-semibold ${
+                          darkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          Generated Health Reports ({session.generatedReports.length})
+                        </h4>
+                      </div>
+                      <div className="space-y-3">
+                        {session.generatedReports.map((report: GeneratedReport) => (
+                          <div
+                            key={report.id}
+                            className={`rounded-lg border p-4 ${
+                              darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <FileText className="w-5 h-5 text-green-600" />
+                                  <span className={`font-medium ${
+                                    darkMode ? 'text-white' : 'text-gray-900'
+                                  }`}>
+                                    {report.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Report
+                                  </span>
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    v{report.report_version}
+                                  </span>
+                                </div>
+                                <div className={`flex items-center space-x-3 text-xs ${
+                                  darkMode ? 'text-gray-400' : 'text-gray-600'
+                                }`}>
+                                  <span className="flex items-center">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    {new Date(report.generated_at).toLocaleDateString()}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{(report.file_size / 1024).toFixed(1)} KB</span>
+                                  <span>•</span>
+                                  <span className="flex items-center text-green-600 dark:text-green-400">
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Complete
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2 ml-4">
+                                <button
+                                  onClick={() => handleViewGeneratedReport(report)}
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    darkMode
+                                      ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                                  }`}
+                                  title="Preview Report"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadGeneratedReport(report)}
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    darkMode
+                                      ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                                  }`}
+                                  title="Download Report"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {session.parsedReports && session.parsedReports.length > 0 && !session.generatedReports.find((r: any) => r.session_id === session.id) && (
+                        <button
+                          onClick={() => handleGenerateReport(session.id)}
+                          disabled={generatingReport === session.id}
+                          className={`mt-3 w-full py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
+                            generatingReport === session.id
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-green-600 hover:bg-green-700 text-white'
+                          }`}
+                        >
+                          {generatingReport === session.id ? (
+                            <>
+                              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                              <span>Generating Report...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4" />
+                              <span>Generate Comprehensive Report</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Generate Report Button for sessions without generated reports */}
+                  {session.parsedReports && session.parsedReports.length > 0 && (!session.generatedReports || session.generatedReports.length === 0) && (
+                    <div className={`px-4 py-3 border-t ${
+                      darkMode ? 'border-gray-700' : 'border-gray-200'
+                    }`}>
+                      <button
+                        onClick={() => handleGenerateReport(session.id)}
+                        disabled={generatingReport === session.id}
+                        className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
+                          generatingReport === session.id
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700 text-white'
+                        }`}
+                      >
+                        {generatingReport === session.id ? (
+                          <>
+                            <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                            <span>Generating Report...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-5 h-5" />
+                            <span>Generate Comprehensive Health Report</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Report Preview Modal */}
+      {viewingGeneratedReport && reportPreviewHtml && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
+          <div className={`relative w-full max-w-5xl max-h-[90vh] rounded-xl shadow-2xl overflow-hidden ${
+            darkMode ? 'bg-gray-900' : 'bg-white'
+          }`}>
+            <div className={`sticky top-0 z-10 flex items-center justify-between p-4 border-b ${
+              darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            }`}>
+              <div>
+                <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Health Report Preview
+                </h3>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Generated {new Date(viewingGeneratedReport.generated_at).toLocaleString()}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleDownloadGeneratedReport(viewingGeneratedReport)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingGeneratedReport(null);
+                    setReportPreviewHtml(null);
+                  }}
+                  className={`p-2 rounded-lg transition-colors ${
+                    darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  <span className="text-2xl">&times;</span>
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(90vh-80px)] p-4">
+              <iframe
+                srcDoc={reportPreviewHtml}
+                className="w-full h-[800px] border-0"
+                title="Report Preview"
+                sandbox="allow-same-origin"
+              />
+            </div>
+          </div>
         </div>
       )}
 

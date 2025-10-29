@@ -683,7 +683,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
           onClick={onConfirm}
           className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
         >
-          <span>Confirm & Continue</span>
+          <span>Confirm & Generate Report</span>
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
