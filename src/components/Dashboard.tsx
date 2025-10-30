@@ -204,12 +204,14 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
 
       if (pdfFiles.length > 0) {
         alert(
-          `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
-          `Please convert your PDF medical reports to images:\n` +
+          `PDF Upload Temporarily Unavailable\n\n` +
+          `PDF uploads are temporarily disabled while we enhance our parsing system.\n\n` +
+          `Image uploads (PNG, JPEG, WEBP) remain fully available.\n\n` +
+          `This feature will be restored shortly. Thank you for your patience.\n\n` +
+          `Please convert PDFs to images or wait for the feature to return:\n` +
           `• Take screenshots of each page\n` +
           `• Use online PDF to PNG/JPEG converters\n` +
-          `• Save as PNG, JPEG, or WEBP format\n\n` +
-          `Supported formats: PNG, JPEG, WEBP`
+          `• Supported formats: PNG, JPEG, WEBP`
         );
         e.target.value = '';
         return;

@@ -81,35 +81,35 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
 
+      // TEMPORARY: Block PDF uploads during system maintenance
+      const pdfFiles = selectedFiles.filter(file =>
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      );
+
+      if (pdfFiles.length > 0) {
+        alert(
+          `PDF Upload Temporarily Unavailable\n\n` +
+          `PDF uploads are temporarily disabled while we enhance our parsing system.\n\n` +
+          `Image uploads (PNG, JPEG, WEBP) remain fully available.\n\n` +
+          `This feature will be restored shortly. Thank you for your patience.\n\n` +
+          `PDF files in your selection:\n${pdfFiles.map(f => `• ${f.name}`).join('\n')}`
+        );
+        return;
+      }
+
       // Validate file types
-      const supportedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
+      const supportedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
       const unsupportedFiles = selectedFiles.filter(file =>
         !supportedTypes.includes(file.type) &&
-        !file.name.toLowerCase().match(/\.(png|jpg|jpeg|webp|pdf)$/)
+        !file.name.toLowerCase().match(/\.(png|jpg|jpeg|webp)$/)
       );
 
       if (unsupportedFiles.length > 0) {
         alert(
           `Some files have unsupported formats.\n\n` +
-          `Supported formats: PNG, JPEG, WEBP, PDF\n\n` +
+          `Supported formats: PNG, JPEG, WEBP\n` +
+          `Note: PDF uploads are temporarily disabled\n\n` +
           `Unsupported files:\n${unsupportedFiles.map(f => `• ${f.name}`).join('\n')}`
-        );
-        return;
-      }
-
-      // Validate PDF file size (max 20MB per PDF)
-      const largePdfs = selectedFiles.filter(file =>
-        file.type === 'application/pdf' && file.size > 20 * 1024 * 1024
-      );
-
-      if (largePdfs.length > 0) {
-        alert(
-          `Some PDF files are too large (max 20MB per PDF).\n\n` +
-          `Large files:\n${largePdfs.map(f => `• ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}\n\n` +
-          `Tips:\n` +
-          `• Compress the PDF using online tools\n` +
-          `• Split multi-page PDFs into smaller files\n` +
-          `• Convert to high-quality images (PNG/JPEG)`
         );
         return;
       }
@@ -1223,17 +1223,22 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         <span className="font-semibold">Click to upload</span> or drag and drop
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        Images: PNG, JPEG, WEBP (MAX. 10MB each)
+                        Supported formats: PNG, JPEG, WEBP (images only)
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        PDFs: Medical reports (MAX. 20MB each)
+                        MAX. 10MB per file
                       </p>
+                      <div className={`mt-3 px-3 py-2 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800/30' : 'bg-yellow-50 border border-yellow-200'}`}>
+                        <p className={`text-xs ${darkMode ? 'text-yellow-300' : 'text-yellow-700'} text-center`}>
+                          PDF uploads temporarily unavailable
+                        </p>
+                      </div>
                     </div>
                     <input
                       id="file-upload"
                       type="file"
                       multiple
-                      accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf"
+                      accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
                       onChange={handleFileChange}
                       className="hidden"
                     />
