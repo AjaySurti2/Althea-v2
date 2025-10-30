@@ -42,12 +42,17 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const checkApiKeyStatus = async () => {
     try {
+      const { data: { session: userSession } } = await supabase.auth.getSession();
+      const accessToken = userSession?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-api-key`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
         }
       );
@@ -211,7 +216,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       setParsingInProgress(true);
 
       try {
-        console.log('=== Calling parse-medical-report edge function ===');
+        console.log('=== Calling unified medical document parser ===');
         console.log('Session ID:', session.id);
         console.log('File IDs:', uploadedFileIds);
         console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
@@ -221,7 +226,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
         console.log('Using access token for Edge Function:', accessToken ? 'Token found' : 'No token');
 
-        const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-medical-report`;
+        // Use unified orchestrator with intelligent fallback (OpenAI primary, Anthropic fallback)
+        const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-medical-document-unified`;
         console.log('Edge function URL:', edgeFunctionUrl);
 
         // Create AbortController with 150 second timeout (matching Edge Function limit)
@@ -239,6 +245,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             body: JSON.stringify({
               sessionId: session.id,
               fileIds: uploadedFileIds,
+              preferredProvider: 'auto', // 'auto' uses OpenAI first with Anthropic fallback
             }),
             signal: controller.signal,
           });

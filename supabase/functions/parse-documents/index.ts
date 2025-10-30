@@ -453,18 +453,73 @@ async function saveStructuredData(supabase: any, fileData: any, sessionId: strin
     }
   }
 
+  // Convert flat metrics to panels structure (group by category if available)
+  const panels: any[] = [];
+  const panelMap = new Map<string, any[]>();
+
+  for (const metric of (parsed.metrics || [])) {
+    const category = metric.category || "General Tests";
+    if (!panelMap.has(category)) {
+      panelMap.set(category, []);
+    }
+    panelMap.get(category)!.push({
+      test_name: metric.test || "",
+      value: metric.value || "",
+      unit: metric.unit || "",
+      range_text: metric.range || "",
+      status: metric.status || "",
+    });
+  }
+
+  for (const [panelName, tests] of panelMap.entries()) {
+    panels.push({
+      panel_name: panelName,
+      tests: tests,
+    });
+  }
+
   const structured_data = {
     profile_name: parsed.patient?.name || "",
-    patient_info: parsed.patient || {},
-    report_date: parsed.lab_details?.report_date || "",
+    patient_info: {
+      name: parsed.patient?.name || "",
+      age: parsed.patient?.age || "",
+      gender: parsed.patient?.gender || "",
+      contact: parsed.patient?.contact || "",
+      address: parsed.patient?.address || "",
+      id: "",
+    },
+    lab_details: {
+      lab_name: parsed.lab_details?.lab_name || "",
+      doctor: parsed.lab_details?.doctor || "",
+      report_id: parsed.lab_details?.report_id || "",
+      report_date: parsed.lab_details?.report_date || "",
+      test_date: parsed.lab_details?.test_date || "",
+    },
     lab_name: parsed.lab_details?.lab_name || "",
     doctor_name: parsed.lab_details?.doctor || "",
+    doctor_info: {
+      name: parsed.lab_details?.doctor || "",
+      specialty: "",
+    },
+    dates: {
+      test_date: parsed.lab_details?.test_date || "",
+      report_date: parsed.lab_details?.report_date || "",
+    },
+    report_date: parsed.lab_details?.report_date || "",
+    panels: panels,
     key_metrics: (parsed.metrics || []).map((m: any) => ({
       test_name: m.test || "",
       value: m.value || "",
       unit: m.unit || "",
       reference_range: m.range || "",
       interpretation: m.status || ""
+    })),
+    test_results: (parsed.metrics || []).map((m: any) => ({
+      test_name: m.test || "",
+      value: m.value || "",
+      unit: m.unit || "",
+      reference_range: m.range || "",
+      status: m.status || ""
     })),
     summary: parsed.summary || "",
   };
@@ -482,9 +537,11 @@ async function saveStructuredData(supabase: any, fileData: any, sessionId: strin
       parsing: 0.96,
     },
     metadata: {
+      provider: "anthropic",
       ai_model: model,
       attempt_number: attemptNumber,
       file_type: fileData.file_type,
+      extraction_method: fileData.file_type === 'application/pdf' ? 'pdf' : 'vision',
     },
   });
 

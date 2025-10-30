@@ -681,7 +681,16 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
       name: parsed.patient?.name || "",
       age: parsed.patient?.age || "",
       gender: parsed.patient?.gender || "",
+      contact: parsed.patient?.contact || "",
+      address: parsed.patient?.address || "",
       id: "",
+    },
+    lab_details: {
+      lab_name: parsed.lab_details?.lab_name || "",
+      doctor: parsed.lab_details?.doctor || "",
+      report_id: parsed.lab_details?.report_id || "",
+      report_date: reportDate || "",
+      test_date: testDate || "",
     },
     lab_name: parsed.lab_details?.lab_name || "",
     doctor_name: parsed.lab_details?.doctor || "",
@@ -707,9 +716,11 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
     parsing_status: "completed",
     structured_data,
     metadata: {
+      provider: "openai",
       ai_model: "gpt-4o-mini",
       attempt_number: attemptNumber,
       validation: validation,
+      extraction_method: fileData.file_type === 'application/pdf' ? 'pdf' : 'vision',
     },
   });
 
