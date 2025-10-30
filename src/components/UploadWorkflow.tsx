@@ -1219,17 +1219,17 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   >
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <Upload className={`w-12 h-12 mb-3 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                      <p className={`mb-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <p className={`mb-2 text-sm ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
                         <span className="font-semibold">Click to upload</span> or drag and drop
                       </p>
-                      <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p className={`text-xs ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                         Supported formats: PNG, JPEG, WEBP (images only)
                       </p>
-                      <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p className={`text-xs ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                         MAX. 10MB per file
                       </p>
                       <div className={`mt-3 px-3 py-2 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800/30' : 'bg-yellow-50 border border-yellow-200'}`}>
-                        <p className={`text-xs ${darkMode ? 'text-yellow-300' : 'text-yellow-700'} text-center`}>
+                        <p className={`text-xs ${darkMode ? 'text-yellow-200' : 'text-yellow-800'} text-center font-medium`}>
                           PDF uploads temporarily unavailable
                         </p>
                       </div>
