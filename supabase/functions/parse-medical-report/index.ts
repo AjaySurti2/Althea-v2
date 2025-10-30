@@ -571,6 +571,32 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
   };
 }
 
+// Update file processing status in database
+async function updateFileStatus(
+  supabase: any,
+  fileId: string,
+  sessionId: string,
+  userId: string,
+  status: string,
+  progress: number,
+  additionalData: any = {}
+) {
+  try {
+    await supabase.from("file_processing_status").upsert({
+      file_id: fileId,
+      session_id: sessionId,
+      user_id: userId,
+      status,
+      progress,
+      ...additionalData,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Failed to update file status:", error);
+    // Don't throw - continue processing even if status update fails
+  }
+}
+
 // Process single file with timeout
 async function processFile(
   fileId: string,
@@ -604,7 +630,17 @@ async function processFile(
 
     console.log(`📁 File: ${fileData.file_name} (${fileData.file_type})`);
 
+    // Initialize processing status
+    await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "pending", 0, {
+      file_name: fileData.file_name,
+      file_type: fileData.file_type,
+      file_size_bytes: fileData.file_size,
+      processing_started_at: new Date().toISOString(),
+    });
+
     // Download file from storage (check both buckets)
+    await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "downloading", 10);
+
     let downloadData = null;
     let downloadError = null;
 
@@ -637,6 +673,8 @@ async function processFile(
     console.log(`✅ Downloaded ${arrayBuffer.byteLength} bytes`);
 
     // Extract text from file (supports both images and PDFs)
+    await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "extracting", 30);
+
     const documentText = await extractTextFromFile(
       arrayBuffer,
       fileData.file_type,
@@ -644,13 +682,29 @@ async function processFile(
     );
 
     // Parse with OpenAI
+    await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "parsing", 60);
+
     const parsedResult = await parseWithOpenAI(documentText, fileData.file_name);
 
     // Save to database
+    await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "saving", 90);
+
     const saved = await saveToDatabase(supabase, fileData, sessionId, parsedResult);
 
     const processingTime = Date.now() - fileStartTime;
     console.log(`✅ Successfully processed ${fileData.file_name} in ${processingTime}ms`);
+
+    // Mark as completed
+    await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "completed", 100, {
+      processing_completed_at: new Date().toISOString(),
+      processing_duration_ms: processingTime,
+      extracted_text: documentText.substring(0, 1000), // Cache first 1000 chars
+      extraction_model: "gpt-4o-mini",
+      parsing_metadata: {
+        attempt_number: parsedResult.attemptNumber,
+        validation: parsedResult.validation,
+      },
+    });
 
     return {
       status: "success",
@@ -667,6 +721,27 @@ async function processFile(
   } catch (error: any) {
     const processingTime = Date.now() - fileStartTime;
     console.error(`❌ Error processing file ${fileId}:`, error.message);
+
+    // Mark as failed
+    try {
+      const { data: fileData } = await supabase
+        .from("files")
+        .select("user_id")
+        .eq("id", fileId)
+        .single();
+
+      if (fileData) {
+        await updateFileStatus(supabase, fileId, sessionId, fileData.user_id, "failed", 0, {
+          processing_completed_at: new Date().toISOString(),
+          processing_duration_ms: processingTime,
+          error_message: error.message,
+          error_code: error.name || "PROCESSING_ERROR",
+          is_retryable: error.message !== "TIMEOUT_APPROACHING",
+        });
+      }
+    } catch (statusError) {
+      console.error("Failed to update error status:", statusError);
+    }
 
     return {
       status: "failed",

@@ -8,6 +8,7 @@ import { ParsedDataReview } from './ParsedDataReview';
 import { HealthInsights } from './HealthInsights';
 import { MetricsTracking } from './MetricsTracking';
 import { FamilyDetailsCapture } from './FamilyDetailsCapture';
+import { ProcessingProgress } from './ProcessingProgress';
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -1299,16 +1300,27 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   </div>
                 )}
 
-                {(processing || parsingInProgress) && (
+                {processing && !parsingInProgress && (
                   <div className="text-center py-6">
                     <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {processing ? 'Uploading files...' : 'Parsing documents with AI...'}
+                      Uploading files...
                     </p>
                     <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {processing ? 'Please wait while we upload your documents' : 'Extracting health information from your documents'}
+                      Please wait while we upload your documents
                     </p>
                   </div>
+                )}
+
+                {parsingInProgress && sessionId && (
+                  <ProcessingProgress
+                    sessionId={sessionId}
+                    darkMode={darkMode}
+                    onComplete={() => {
+                      setParsingInProgress(false);
+                      setShowParsedDataReview(true);
+                    }}
+                  />
                 )}
 
                 {!processing && !parsingInProgress && (
