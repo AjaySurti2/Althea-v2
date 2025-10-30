@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Loader2, AlertCircle } from 'lucide-react';
+import { X, Loader2, AlertCircle, User, Phone, Calendar, MapPin, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -10,11 +10,18 @@ interface AuthModalProps {
   darkMode: boolean;
 }
 
+const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'];
+
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: initialMode, darkMode }) => {
   const [mode, setMode] = useState<'signin' | 'signup' | 'lead'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
+  const [address, setAddress] = useState('');
+  const [userType, setUserType] = useState<'self' | 'caretaker'>('self');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -44,7 +51,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
           setFullName('');
         }, 2000);
       } else if (mode === 'signup') {
-        const { error } = await signUp(email, password, fullName);
+        const { error } = await signUp(email, password, {
+          full_name: fullName,
+          phone,
+          date_of_birth: dateOfBirth,
+          gender,
+          address,
+          user_type: userType,
+        });
         if (error) throw error;
         setSuccess('Account created successfully! You can now sign in.');
         setTimeout(() => {
@@ -66,20 +80,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div
-        className={`relative w-full max-w-md rounded-2xl shadow-2xl ${
+        className={`relative w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto ${
           darkMode ? 'bg-gray-800' : 'bg-white'
         }`}
       >
         <button
           onClick={onClose}
-          className={`absolute top-4 right-4 p-2 rounded-lg transition-colors ${
-            darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+          className={`sticky top-4 right-4 z-10 ml-auto mr-4 mt-4 p-2 rounded-lg transition-colors ${
+            darkMode ? 'hover:bg-gray-700 text-gray-400 bg-gray-800/80 backdrop-blur' : 'hover:bg-gray-100 text-gray-600 bg-white/80 backdrop-blur'
           }`}
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="p-8">
+        <div className="p-8 pt-0">
           <div className="mb-6">
             <h2 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               {mode === 'lead' ? 'Join Early Access' : mode === 'signup' ? 'Create Account' : 'Welcome Back'}
@@ -120,7 +134,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
             {(mode === 'signup' || mode === 'lead') && (
               <div>
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Full Name
+                  Full Name *
                 </label>
                 <input
                   type="text"
@@ -129,8 +143,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
                   required
                   className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
                     darkMode
-                      ? 'bg-gray-700 border-gray-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-900'
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
                   placeholder="John Doe"
                 />
@@ -139,7 +153,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
 
             <div>
               <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Email
+                Email *
               </label>
               <input
                 type="email"
@@ -148,8 +162,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
                 required
                 className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
                   darkMode
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                 }`}
                 placeholder="you@example.com"
               />
@@ -158,7 +172,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
             {mode !== 'lead' && (
               <div>
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Password
+                  Password *
                 </label>
                 <input
                   type="password"
@@ -168,12 +182,133 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
                   minLength={6}
                   className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
                     darkMode
-                      ? 'bg-gray-700 border-gray-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-900'
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                   }`}
                   placeholder="••••••••"
                 />
               </div>
+            )}
+
+            {mode === 'signup' && (
+              <>
+                <div className={`p-4 rounded-lg border ${darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                  <label className={`block text-sm font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                    <Users className="w-4 h-4 inline mr-2" />
+                    I am
+                  </label>
+                  <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-2 sm:space-y-0">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="userType"
+                        value="self"
+                        checked={userType === 'self'}
+                        onChange={(e) => setUserType(e.target.value as 'self' | 'caretaker')}
+                        className="w-4 h-4 text-green-500 focus:ring-green-500"
+                      />
+                      <span className={`ml-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Managing my own health
+                      </span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="userType"
+                        value="caretaker"
+                        checked={userType === 'caretaker'}
+                        onChange={(e) => setUserType(e.target.value as 'self' | 'caretaker')}
+                        className="w-4 h-4 text-green-500 focus:ring-green-500"
+                      />
+                      <span className={`ml-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        A caretaker for others
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <Phone className="w-4 h-4 inline mr-1" />
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
+                        darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                      placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <Calendar className="w-4 h-4 inline mr-1" />
+                      Date of Birth
+                    </label>
+                    <input
+                      type="date"
+                      value={dateOfBirth}
+                      onChange={(e) => setDateOfBirth(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
+                        darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <User className="w-4 h-4 inline mr-1" />
+                    Gender
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
+                      darkMode
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    <option value="">Select gender (optional)</option>
+                    {GENDERS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <MapPin className="w-4 h-4 inline mr-1" />
+                    Address
+                  </label>
+                  <textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    rows={2}
+                    className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all resize-none ${
+                      darkMode
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    }`}
+                    placeholder="Street Address, City, State, ZIP (optional)"
+                  />
+                </div>
+
+                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Optional fields help us provide personalized health insights
+                </p>
+              </>
             )}
 
             <button
