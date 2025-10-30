@@ -2,12 +2,21 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session as SupabaseSession } from '@supabase/supabase-js';
 import { supabase, Profile } from '../lib/supabase';
 
+interface SignUpData {
+  full_name: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  address?: string;
+  user_type?: 'self' | 'caretaker';
+}
+
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   session: SupabaseSession | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, data: SignUpData) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -73,14 +82,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, data: SignUpData) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName,
+            full_name: data.full_name,
+            email: email,
+            phone: data.phone || null,
+            date_of_birth: data.date_of_birth || null,
+            gender: data.gender || null,
+            address: data.address || null,
+            user_type: data.user_type || 'self',
           },
         },
       });
