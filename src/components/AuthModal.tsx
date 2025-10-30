@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Loader2, AlertCircle, User, Phone, Calendar, MapPin, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -26,6 +26,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const { signIn, signUp } = useAuth();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -45,7 +54,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
 
         if (error) throw error;
         setSuccess('Thank you! We\'ll be in touch soon with early access details.');
-        setTimeout(() => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
           onClose();
           setEmail('');
           setFullName('');
@@ -61,7 +71,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode: ini
         });
         if (error) throw error;
         setSuccess('Account created successfully! You can now sign in.');
-        setTimeout(() => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
           setMode('signin');
           setPassword('');
         }, 1500);

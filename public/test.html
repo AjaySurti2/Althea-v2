@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Althea - Test Page</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #059669; margin-top: 0; }
+        .success { color: #059669; font-weight: bold; }
+        .info { color: #666; margin: 10px 0; }
+        button {
+            background: #059669;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button:hover { background: #047857; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Althea - System Check</h1>
+        <p class="success">✓ Static files are working correctly!</p>
+        <p class="info">Build Date: <span id="buildDate"></span></p>
+        <p class="info">Status: Application compiled successfully</p>
+        <button onclick="window.location.href='/'">Go to Application</button>
+        
+        <script>
+            document.getElementById('buildDate').textContent = new Date().toLocaleString();
+        </script>
+    </div>
+</body>
+</html>
