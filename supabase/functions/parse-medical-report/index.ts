@@ -571,10 +571,181 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
   };
 }
 
+// Process single file with timeout
+async function processFile(
+  fileId: string,
+  sessionId: string,
+  supabase: any,
+  startTime: number,
+  maxDuration: number
+): Promise<any> {
+  const fileStartTime = Date.now();
+  const elapsedSoFar = fileStartTime - startTime;
+
+  // Check if we have enough time left
+  if (elapsedSoFar > maxDuration * 0.8) {
+    throw new Error("TIMEOUT_APPROACHING");
+  }
+
+  try {
+    console.log(`\n📄 Processing file: ${fileId}`);
+
+    // Get file metadata
+    const { data: fileData, error: fileError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .single();
+
+    if (fileError || !fileData) {
+      console.error("❌ File not found in database");
+      throw new Error("File not found");
+    }
+
+    console.log(`📁 File: ${fileData.file_name} (${fileData.file_type})`);
+
+    // Download file from storage (check both buckets)
+    let downloadData = null;
+    let downloadError = null;
+
+    // Try medical-files bucket first
+    const medicalFilesResult = await supabase.storage
+      .from("medical-files")
+      .download(fileData.storage_path);
+
+    if (!medicalFilesResult.error) {
+      downloadData = medicalFilesResult.data;
+    } else {
+      // Try report-pdfs bucket as fallback
+      const reportsResult = await supabase.storage
+        .from("report-pdfs")
+        .download(fileData.storage_path);
+
+      if (!reportsResult.error) {
+        downloadData = reportsResult.data;
+      } else {
+        downloadError = reportsResult.error;
+      }
+    }
+
+    if (downloadError || !downloadData) {
+      console.error("❌ Download failed:", downloadError);
+      throw new Error("File download failed");
+    }
+
+    const arrayBuffer = await downloadData.arrayBuffer();
+    console.log(`✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+
+    // Extract text from file (supports both images and PDFs)
+    const documentText = await extractTextFromFile(
+      arrayBuffer,
+      fileData.file_type,
+      fileData.file_name
+    );
+
+    // Parse with OpenAI
+    const parsedResult = await parseWithOpenAI(documentText, fileData.file_name);
+
+    // Save to database
+    const saved = await saveToDatabase(supabase, fileData, sessionId, parsedResult);
+
+    const processingTime = Date.now() - fileStartTime;
+    console.log(`✅ Successfully processed ${fileData.file_name} in ${processingTime}ms`);
+
+    return {
+      status: "success",
+      fileId: fileData.id,
+      fileName: fileData.file_name,
+      fileType: fileData.file_type,
+      patient: saved.patient?.name,
+      labReport: saved.labReport?.lab_name,
+      testCount: saved.testCount,
+      attemptNumber: parsedResult.attemptNumber,
+      validation: parsedResult.validation,
+      processingTime,
+    };
+  } catch (error: any) {
+    const processingTime = Date.now() - fileStartTime;
+    console.error(`❌ Error processing file ${fileId}:`, error.message);
+
+    return {
+      status: "failed",
+      fileId,
+      error: error.message,
+      processingTime,
+    };
+  }
+}
+
+// Process files in parallel with concurrency control
+async function processFilesParallel(
+  fileIds: string[],
+  sessionId: string,
+  supabase: any,
+  maxConcurrent: number = 3,
+  maxDuration: number = 120000
+): Promise<{ results: any[]; timedOut: boolean }> {
+  const startTime = Date.now();
+  const results: any[] = [];
+  const queue = [...fileIds];
+  const inProgress = new Map<string, Promise<any>>();
+  let timedOut = false;
+
+  console.log(`🚀 Starting parallel processing: ${fileIds.length} files, max ${maxConcurrent} concurrent`);
+
+  while (queue.length > 0 || inProgress.size > 0) {
+    const elapsed = Date.now() - startTime;
+
+    // Check if we're approaching timeout (80% threshold = 96 seconds for 120s limit)
+    if (elapsed > maxDuration * 0.8) {
+      console.warn(`⏰ Timeout approaching (${elapsed}ms elapsed), stopping new processing`);
+      timedOut = true;
+      break;
+    }
+
+    // Start new jobs up to max concurrent
+    while (inProgress.size < maxConcurrent && queue.length > 0) {
+      const fileId = queue.shift()!;
+      console.log(`▶️  Starting file ${fileId} (${inProgress.size + 1}/${maxConcurrent} concurrent, ${queue.length} queued)`);
+
+      const promise = processFile(fileId, sessionId, supabase, startTime, maxDuration);
+      inProgress.set(fileId, promise);
+
+      // Remove from inProgress when done
+      promise.finally(() => inProgress.delete(fileId));
+    }
+
+    // Wait for at least one to complete
+    if (inProgress.size > 0) {
+      const result = await Promise.race(inProgress.values());
+      results.push(result);
+      console.log(`✓ Completed: ${results.length}/${fileIds.length}`);
+    }
+  }
+
+  // Wait for remaining in-progress files to complete (with timeout)
+  if (inProgress.size > 0) {
+    console.log(`⏳ Waiting for ${inProgress.size} remaining files...`);
+    const remaining = await Promise.allSettled(Array.from(inProgress.values()));
+    remaining.forEach(result => {
+      if (result.status === "fulfilled") {
+        results.push(result.value);
+      }
+    });
+  }
+
+  const totalTime = Date.now() - startTime;
+  console.log(`🏁 Parallel processing complete: ${results.length} processed in ${totalTime}ms`);
+
+  return { results, timedOut };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
+
+  const requestStartTime = Date.now();
 
   try {
     console.log("=== Parse Medical Report Request Started ===");
@@ -594,110 +765,54 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const results = [];
-    const errors = [];
+    // Process files in parallel with timeout protection
+    const MAX_CONCURRENT = 3;
+    const MAX_DURATION_MS = 120000; // 120 seconds soft limit
 
-    for (const fileId of fileIds) {
-      try {
-        console.log(`\n📄 Processing file: ${fileId}`);
+    const { results, timedOut } = await processFilesParallel(
+      fileIds,
+      sessionId,
+      supabase,
+      MAX_CONCURRENT,
+      MAX_DURATION_MS
+    );
 
-        // Get file metadata
-        const { data: fileData, error: fileError } = await supabase
-          .from("files")
-          .select("*")
-          .eq("id", fileId)
-          .single();
+    // Separate successful and failed results
+    const successResults = results.filter(r => r.status === "success");
+    const failedResults = results.filter(r => r.status === "failed");
 
-        if (fileError || !fileData) {
-          console.error("❌ File not found in database");
-          errors.push({ fileId, error: "File not found" });
-          continue;
-        }
-
-        console.log(`📁 File: ${fileData.file_name} (${fileData.file_type})`);
-
-        // Download file from storage (check both buckets)
-        let downloadData = null;
-        let downloadError = null;
-
-        // Try medical-files bucket first
-        const medicalFilesResult = await supabase.storage
-          .from("medical-files")
-          .download(fileData.storage_path);
-
-        if (!medicalFilesResult.error) {
-          downloadData = medicalFilesResult.data;
-        } else {
-          // Try report-pdfs bucket as fallback
-          const reportsResult = await supabase.storage
-            .from("report-pdfs")
-            .download(fileData.storage_path);
-
-          if (!reportsResult.error) {
-            downloadData = reportsResult.data;
-          } else {
-            downloadError = reportsResult.error;
-          }
-        }
-
-        if (downloadError || !downloadData) {
-          console.error("❌ Download failed:", downloadError);
-          errors.push({ fileId, error: "File download failed" });
-          continue;
-        }
-
-        const arrayBuffer = await downloadData.arrayBuffer();
-        console.log(`✅ Downloaded ${arrayBuffer.byteLength} bytes`);
-
-        // Extract text from file
-        const documentText = await extractTextFromFile(
-          arrayBuffer,
-          fileData.file_type,
-          fileData.file_name
-        );
-
-        // Parse with OpenAI
-        const parsedResult = await parseWithOpenAI(documentText, fileData.file_name);
-
-        // Save to database
-        const saved = await saveToDatabase(supabase, fileData, sessionId, parsedResult);
-
-        results.push({
-          fileId: fileData.id,
-          fileName: fileData.file_name,
-          patient: saved.patient?.name,
-          labReport: saved.labReport?.lab_name,
-          testCount: saved.testCount,
-          attemptNumber: parsedResult.attemptNumber,
-          validation: parsedResult.validation,
-        });
-
-        console.log(`✅ Successfully processed ${fileData.file_name}`);
-      } catch (fileError: any) {
-        console.error(`❌ Error processing file ${fileId}:`, fileError.message);
-        errors.push({ fileId, error: fileError.message });
-      }
-    }
+    const totalTime = Date.now() - requestStartTime;
 
     console.log("\n=== Processing Complete ===");
-    console.log(`✅ Success: ${results.length}, ❌ Errors: ${errors.length}`);
+    console.log(`✅ Success: ${successResults.length}, ❌ Errors: ${failedResults.length}`);
+    console.log(`⏱️  Total time: ${totalTime}ms`);
+    if (timedOut) {
+      console.warn(`⚠️  Processing stopped due to timeout protection`);
+    }
 
+    // Return response with partial results if needed
     return new Response(
       JSON.stringify({
-        success: true,
-        results,
-        total_processed: results.length,
+        success: successResults.length > 0,
+        results: successResults,
+        total_processed: successResults.length,
         total_requested: fileIds.length,
-        errors: errors.length > 0 ? errors : undefined,
+        total_failed: failedResults.length,
+        errors: failedResults.length > 0 ? failedResults : undefined,
+        timedOut,
+        processingTime: totalTime,
+        partialSuccess: successResults.length > 0 && successResults.length < fileIds.length,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
+    const totalTime = Date.now() - requestStartTime;
     console.error("=== Parse Medical Report Error ===", error);
     return new Response(
       JSON.stringify({
         error: error.message || "Failed to parse medical report",
         details: error.toString(),
+        processingTime: totalTime,
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

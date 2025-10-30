@@ -75,21 +75,36 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
 
-      // Check for PDF files
-      const pdfFiles = selectedFiles.filter(file =>
-        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      // Validate file types
+      const supportedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
+      const unsupportedFiles = selectedFiles.filter(file =>
+        !supportedTypes.includes(file.type) &&
+        !file.name.toLowerCase().match(/\.(png|jpg|jpeg|webp|pdf)$/)
       );
 
-      if (pdfFiles.length > 0) {
+      if (unsupportedFiles.length > 0) {
         alert(
-          `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
-          `Please convert your PDF medical reports to images:\n` +
-          `• Take screenshots of each page\n` +
-          `• Use online PDF to PNG/JPEG converters\n` +
-          `• Save as PNG, JPEG, or WEBP format\n\n` +
-          `Supported formats: PNG, JPEG, WEBP`
+          `Some files have unsupported formats.\n\n` +
+          `Supported formats: PNG, JPEG, WEBP, PDF\n\n` +
+          `Unsupported files:\n${unsupportedFiles.map(f => `• ${f.name}`).join('\n')}`
         );
-        e.target.value = ''; // Clear the input
+        return;
+      }
+
+      // Validate PDF file size (max 20MB per PDF)
+      const largePdfs = selectedFiles.filter(file =>
+        file.type === 'application/pdf' && file.size > 20 * 1024 * 1024
+      );
+
+      if (largePdfs.length > 0) {
+        alert(
+          `Some PDF files are too large (max 20MB per PDF).\n\n` +
+          `Large files:\n${largePdfs.map(f => `• ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}\n\n` +
+          `Tips:\n` +
+          `• Compress the PDF using online tools\n` +
+          `• Split multi-page PDFs into smaller files\n` +
+          `• Convert to high-quality images (PNG/JPEG)`
+        );
         return;
       }
 
@@ -208,18 +223,26 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-medical-report`;
         console.log('Edge function URL:', edgeFunctionUrl);
 
-        const response = await fetch(edgeFunctionUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            sessionId: session.id,
-            fileIds: uploadedFileIds,
-          }),
-        });
+        // Create AbortController with 150 second timeout (matching Edge Function limit)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 150000);
+
+        try {
+          const response = await fetch(edgeFunctionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({
+              sessionId: session.id,
+              fileIds: uploadedFileIds,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
 
         console.log('Edge function response status:', response.status);
         console.log('Edge function response ok:', response.ok);
@@ -239,18 +262,66 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         const result = await response.json();
         console.log('Edge function success:', result);
 
-        if (result.errors && result.errors.length > 0) {
-          console.error('Edge function returned errors:', result.errors);
-          const errorMessages = result.errors.map((e: any) => e.error).join(', ');
-          throw new Error(`Parsing completed with errors: ${errorMessages}`);
+        // Handle partial success scenario
+        if (result.partialSuccess || result.timedOut) {
+          console.warn('Partial success or timeout occurred:', result);
+
+          const successCount = result.total_processed || 0;
+          const failedCount = result.total_failed || 0;
+          const timedOutMessage = result.timedOut ? '\n\nProcessing was stopped to prevent timeout.' : '';
+
+          if (successCount > 0) {
+            alert(
+              `Processing partially completed:\n\n` +
+              `✓ Successfully processed: ${successCount} file(s)\n` +
+              `✗ Failed or skipped: ${failedCount} file(s)${timedOutMessage}\n\n` +
+              `You can view the successfully processed reports and retry failed files if needed.`
+            );
+          }
         }
 
+        // Check if we have any successful results
         if (!result.results || result.results.length === 0) {
-          throw new Error('No documents were successfully parsed. Please check if OPENAI_API_KEY is configured in Supabase Edge Functions secrets.');
+          const errorDetails = result.errors && result.errors.length > 0
+            ? result.errors.map((e: any) => `• ${e.fileName || e.fileId}: ${e.error}`).join('\n')
+            : 'Unknown error occurred';
+
+          throw new Error(
+            `No documents were successfully parsed.\n\n` +
+            `Details:\n${errorDetails}\n\n` +
+            `Please check:\n` +
+            `1. Files are valid medical reports\n` +
+            `2. Files are not corrupted\n` +
+            `3. OPENAI_API_KEY is configured in Supabase`
+          );
         }
 
         setParsingInProgress(false);
         setShowParsedDataReview(true);
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+
+          // Handle AbortError (timeout)
+          if (fetchError.name === 'AbortError') {
+            console.error('Request timeout after 150 seconds');
+            alert(
+              `Processing timeout (150 seconds exceeded).\n\n` +
+              `This can happen when:\n` +
+              `• Processing too many large PDF files\n` +
+              `• Network is very slow\n` +
+              `• Files contain many pages\n\n` +
+              `Suggestions:\n` +
+              `• Try uploading fewer files (2-3 at a time)\n` +
+              `• Use smaller PDF files or split large ones\n` +
+              `• Convert PDFs to images for faster processing`
+            );
+          } else {
+            throw fetchError; // Re-throw non-timeout errors
+          }
+
+          setParsingInProgress(false);
+          setProcessing(false);
+        }
       } catch (parseError: any) {
         console.error('=== Document Parsing Failed ===');
         console.error('Error:', parseError);
@@ -260,16 +331,27 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         const errorMessage = parseError.message || 'Unknown error';
         const isApiKeyError = errorMessage.includes('OPENAI_API_KEY') || errorMessage.includes('API key');
         const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch');
+        const isAbortError = parseError.name === 'AbortError';
 
-        if (isFetchError) {
-          alert(`Network Error: Unable to reach the document parsing service.\n\nPossible causes:\n1. The OPENAI_API_KEY is not configured in Supabase Edge Functions\n2. Network connectivity issue\n3. Edge function is not deployed\n\nPlease check:\n- Supabase Dashboard → Edge Functions → parse-medical-report → Secrets\n- Add secret: OPENAI_API_KEY with your OpenAI API key\n\nError details: ${errorMessage}`);
+        if (isAbortError) {
+          // Already handled in inner catch
+          return;
+        } else if (isFetchError) {
+          alert(
+            `Network Error: Unable to reach the document parsing service.\n\n` +
+            `Possible causes:\n` +
+            `1. Network connectivity issue\n` +
+            `2. Edge function is not responding\n` +
+            `3. OPENAI_API_KEY not configured\n\n` +
+            `Please check your internet connection and try again.\n\n` +
+            `Error: ${errorMessage}`
+          );
         } else if (isApiKeyError) {
           alert(`API Configuration Error: ${errorMessage}\n\nThe OpenAI API key needs to be configured in Supabase. Please contact your system administrator.`);
         } else {
-          alert(`Document parsing failed: ${errorMessage}\n\nCheck the console for details.`);
+          alert(`Document parsing failed: ${errorMessage}`);
         }
 
-        // Don't show review since parsing failed
         setProcessing(false);
       }
     } catch (error: any) {
@@ -1097,11 +1179,11 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     Upload Your Medical Documents
                   </h2>
                   <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                    Select your lab results, prescriptions, or medical reports as images (PNG, JPEG, or WEBP).
+                    Select your lab results, prescriptions, or medical reports as images or PDFs.
                   </p>
-                  <div className="mt-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      <strong>Note:</strong> PDF files are not supported. Please convert PDFs to images or take screenshots.
+                  <div className="mt-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Supported formats:</strong> PNG, JPEG, WEBP (images) and PDF (max 20MB per file)
                     </p>
                   </div>
                 </div>
@@ -1121,14 +1203,17 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         <span className="font-semibold">Click to upload</span> or drag and drop
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        PNG, JPEG, WEBP only (MAX. 10MB each)
+                        Images: PNG, JPEG, WEBP (MAX. 10MB each)
+                      </p>
+                      <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        PDFs: Medical reports (MAX. 20MB each)
                       </p>
                     </div>
                     <input
                       id="file-upload"
                       type="file"
                       multiple
-                      accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
+                      accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf"
                       onChange={handleFileChange}
                       className="hidden"
                     />
@@ -1156,9 +1241,18 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                             <FileText className="w-6 h-6 text-green-600" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {file.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                {file.name}
+                              </p>
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                file.type === 'application/pdf'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                  : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                              }`}>
+                                {file.type === 'application/pdf' ? 'PDF' : 'IMAGE'}
+                              </span>
+                            </div>
                             <p className={`text-xs mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                               {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type.split('/')[1]?.toUpperCase() || 'FILE'}
                             </p>
