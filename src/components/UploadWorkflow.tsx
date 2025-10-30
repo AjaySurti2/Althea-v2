@@ -287,13 +287,25 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             ? result.errors.map((e: any) => `• ${e.fileName || e.fileId}: ${e.error}`).join('\n')
             : 'Unknown error occurred';
 
+          // Check if any errors are PDF-related
+          const hasPdfErrors = result.errors?.some((e: any) =>
+            e.error?.includes('PDF') || e.fileId?.toLowerCase().includes('pdf')
+          );
+
           throw new Error(
             `No documents were successfully parsed.\n\n` +
             `Details:\n${errorDetails}\n\n` +
             `Please check:\n` +
-            `1. Files are valid medical reports\n` +
-            `2. Files are not corrupted\n` +
-            `3. OPENAI_API_KEY is configured in Supabase`
+            `1. Files are valid medical reports (not password-protected)\n` +
+            `2. PDF files contain readable text or clear images\n` +
+            `3. Files are not corrupted or incomplete\n` +
+            `4. OPENAI_API_KEY is configured in Supabase\n\n` +
+            (hasPdfErrors ?
+              `PDF Troubleshooting:\n` +
+              `• Try converting PDFs to high-quality PNG/JPEG images\n` +
+              `• Split large multi-page PDFs into separate files\n` +
+              `• Ensure PDF text is selectable (not scanned images)\n` +
+              `• Check PDF file size is under 20MB\n` : '')
           );
         }
 
