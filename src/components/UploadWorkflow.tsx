@@ -1189,7 +1189,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       {processing
                         ? 'Please wait while we upload your documents'
-                        : `Processing ${files.length} file${files.length !== 1 ? 's' : ''} in parallel with OpenAI (fallback to Claude if needed)`
+                        : `Processing ${files.length} file${files.length !== 1 ? 's' : ''} in progress)`
                       }
                     </p>
                   </div>
