@@ -911,7 +911,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Upload Health Report
+                  Althea : Review Documents
                 </h1>
                 <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Review Documents
@@ -957,7 +957,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           <div className={`sticky top-0 z-20 py-6 mb-2 flex items-center justify-between ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
             <div>
               <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Upload Health Report
+                Althea : Your Personal Health Interpreter
               </h1>
               <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Step {currentStep + 1} of 5
