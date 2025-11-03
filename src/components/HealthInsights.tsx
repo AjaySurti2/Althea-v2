@@ -552,6 +552,16 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
         <div className="flex items-center space-x-3">
           <button
+            onClick={handleRegenerate}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+              darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+            }`}
+          >
+            <RefreshCw className="w-5 h-5" />
+            <span>Regenerate</span>
+          </button>
+
+          <button
             onClick={handleGenerateReport}
             disabled={generatingReport}
             className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
@@ -577,7 +587,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
             onClick={onContinue}
             className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
           >
-            <span>View Tracking</span>
+            <span>Complete</span>
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>

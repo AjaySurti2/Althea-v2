@@ -6,7 +6,6 @@ import { DocumentReview } from './DocumentReview';
 import { DataPreview } from './DataPreview';
 import { ParsedDataReview } from './ParsedDataReview';
 import { HealthInsights } from './HealthInsights';
-import { MetricsTracking } from './MetricsTracking';
 import { FamilyDetailsCapture } from './FamilyDetailsCapture';
 
 interface UploadWorkflowProps {
@@ -22,7 +21,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [showParsedDataReview, setShowParsedDataReview] = useState(false);
   const [showDataPreview, setShowDataPreview] = useState(false);
   const [showHealthInsights, setShowHealthInsights] = useState(false);
-  const [showMetricsTracking, setShowMetricsTracking] = useState(false);
   const [parsingInProgress, setParsingInProgress] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState<{ configured: boolean; tested: boolean; working: boolean } | null>(null);
 
@@ -727,17 +725,12 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleHealthInsightsContinue = () => {
     setShowHealthInsights(false);
-    setShowMetricsTracking(true);
+    setShowReview(true);
   };
 
   const handleHealthInsightsBack = () => {
     setShowHealthInsights(false);
     setCurrentStep(2); // Go back to Step 2: Customize
-  };
-
-  const handleMetricsTrackingBack = () => {
-    setShowMetricsTracking(false);
-    setShowHealthInsights(true);
   };
 
   const handleReviewBack = () => {
@@ -827,7 +820,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   Upload Health Report
                 </h1>
                 <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Step 3: AI Health Insights
+                  Step 3: AI Health Insights & Report
                 </p>
               </div>
               <button
@@ -853,41 +846,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     );
   }
 
-  if (showMetricsTracking && sessionId) {
-    return (
-      <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <div className="min-h-screen px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Upload Health Report
-                </h1>
-                <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Step 4: Track & Download
-                </p>
-              </div>
-              <button
-                onClick={onCancel}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-                }`}
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className={`rounded-2xl p-8 shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-              <MetricsTracking
-                sessionId={sessionId}
-                darkMode={darkMode}
-                onBack={handleMetricsTrackingBack}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (showDataPreview && sessionId) {
     return (
@@ -964,15 +922,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     );
   }
 
-  const progressPercentage = (currentStep / 5) * 100; // 5 is the max step number (0-5 = 6 steps)
+  const progressPercentage = (currentStep / 4) * 100; // 4 is the max step number (0-4 = 5 steps)
 
   const steps = [
     { number: 0, icon: Users, label: 'Family Details' },
     { number: 1, icon: Upload, label: 'Upload' },
     { number: 2, icon: Sliders, label: 'Customize' },
-    { number: 3, icon: Eye, label: 'Preview' },
-    { number: 4, icon: Sparkles, label: 'Process' },
-    { number: 5, icon: Download, label: 'Download' },
+    { number: 3, icon: Sparkles, label: 'Health Insights & Report' },
+    { number: 4, icon: CheckCircle, label: 'Complete' },
   ];
 
   return (
@@ -985,7 +942,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 Upload Health Report
               </h1>
               <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Step {currentStep + 1} of 6
+                Step {currentStep + 1} of 5
               </p>
             </div>
             <button
