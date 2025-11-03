@@ -835,7 +835,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Upload Health Report
+                   AI Health Insights & Report
                 </h1>
                 <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Step 3: AI Health Insights & Report
