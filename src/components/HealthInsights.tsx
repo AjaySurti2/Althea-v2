@@ -63,6 +63,14 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
     loadInsights();
   }, [sessionId]);
 
+  // Auto-generate report in background after insights are loaded (Step 3)
+  useEffect(() => {
+    if (insights && !reportCached && !generatingReport && !loading) {
+      // Automatically trigger report generation in the background
+      generateReportInBackground();
+    }
+  }, [insights, reportCached, loading]);
+
   const loadInsights = async () => {
     try {
       setLoading(true);
@@ -156,6 +164,53 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
     await generateInsights();
   };
 
+  // Generate report in background (called automatically in Step 3)
+  const generateReportInBackground = async () => {
+    try {
+      setGeneratingReport(true);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      console.log('Auto-generating report in background for session:', sessionId);
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          reportType: 'comprehensive',
+          includeQuestions: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Background report generation failed:', errorData);
+        return; // Don't throw error - just log it
+      }
+
+      const result = await response.json();
+      console.log('Background report generated:', result.cached ? 'Using cached' : 'New report created');
+
+      if (result.storage_path) {
+        // Cache the report path for instant download later
+        setReportStoragePath(result.storage_path);
+        setReportCached(true);
+      }
+    } catch (err: any) {
+      console.error('Error in background report generation:', err);
+      // Don't show error to user - this is a background operation
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  // Handle report download (Step 4 - downloads cached report from Step 3)
   const handleGenerateReport = async () => {
     try {
       setGeneratingReport(true);
@@ -164,76 +219,76 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      let storagePath = reportStoragePath;
-
-      // If report is not cached, generate it
-      if (!reportCached) {
-        console.log('Generating report for session:', sessionId);
-
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sessionId,
-            reportType: 'comprehensive',
-            includeQuestions: true
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Report generation failed:', errorData);
-          throw new Error(errorData.error || 'Failed to generate report');
-        }
-
-        const result = await response.json();
-        console.log('Report result:', result.cached ? 'Using cached report' : 'Generated new report');
-
-        if (result.storage_path) {
-          storagePath = result.storage_path;
-          setReportStoragePath(storagePath);
-          setReportCached(true);
-        } else {
-          throw new Error('No storage path returned from report generation');
-        }
-      } else {
-        console.log('Using cached report:', storagePath);
+      // If report is already cached from Step 3, just download it
+      if (reportCached && reportStoragePath) {
+        console.log('Downloading cached report from Step 3:', reportStoragePath);
+        await downloadReport(reportStoragePath);
+        return;
       }
 
-      // Download the report from storage
-      if (storagePath) {
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('health-reports')
-          .download(storagePath);
+      // If not cached yet (shouldn't happen in normal flow), generate it now
+      console.log('Report not cached, generating now for session:', sessionId);
 
-        if (downloadError) {
-          console.error('Download error:', downloadError);
-          throw new Error('Failed to download report: ' + downloadError.message);
-        }
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          reportType: 'comprehensive',
+          includeQuestions: true
+        })
+      });
 
-        if (fileData) {
-          // Create download link
-          const url = window.URL.createObjectURL(fileData);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `althea-health-report-${sessionId.substring(0, 8)}.html`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate report');
+      }
 
-          console.log('Report downloaded successfully');
-        }
+      const result = await response.json();
+      console.log('Report result:', result.cached ? 'Using cached' : 'Generated new');
+
+      if (result.storage_path) {
+        setReportStoragePath(result.storage_path);
+        setReportCached(true);
+        await downloadReport(result.storage_path);
+      } else {
+        throw new Error('No storage path returned from report generation');
       }
     } catch (err: any) {
       console.error('Error with report:', err);
       setError(err.message);
     } finally {
       setGeneratingReport(false);
+    }
+  };
+
+  // Helper function to download report from storage
+  const downloadReport = async (storagePath: string) => {
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('health-reports')
+      .download(storagePath);
+
+    if (downloadError) {
+      console.error('Download error:', downloadError);
+      throw new Error('Failed to download report: ' + downloadError.message);
+    }
+
+    if (fileData) {
+      // Create download link
+      const url = window.URL.createObjectURL(fileData);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `althea-health-report-${sessionId.substring(0, 8)}.html`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log('Report downloaded successfully');
     }
   };
 
