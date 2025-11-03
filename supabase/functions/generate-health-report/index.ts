@@ -249,15 +249,14 @@ async function generateHTMLReport(
     .brand-logo {
       width: 60px;
       height: 60px;
-      background: #10b981;
-      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: bold;
-      color: white;
-      font-size: 24px;
-      box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+    }
+    .brand-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
     .brand-name-section {
       display: flex;
@@ -430,6 +429,13 @@ async function generateHTMLReport(
       color: #6b7280;
       text-align: center;
     }
+    .footer-logo {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
     .disclaimer {
       background: #fffbeb;
       border: 1px solid #fde047;
@@ -447,7 +453,9 @@ async function generateHTMLReport(
 <body>
   <div class="brand-header">
     <div class="brand-logo-section">
-      <div class="brand-logo">A</div>
+      <div class="brand-logo">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%2310b981'/%3E%3Ctext x='50' y='70' font-family='Arial, sans-serif' font-size='60' font-weight='bold' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" alt="Althea Logo" />
+      </div>
       <div class="brand-name-section">
         <div class="brand-name">Althea</div>
         <div class="brand-tagline">Your Personal Health Interpreter</div>
@@ -622,7 +630,10 @@ async function generateHTMLReport(
   </div>
 
   <div class="footer">
-    <p><strong>Althea</strong> - Your Personal Health Interpreter | Generated on ${new Date().toLocaleString()}</p>
+    <p>
+      <img class="footer-logo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%2310b981'/%3E%3Ctext x='50' y='70' font-family='Arial, sans-serif' font-size='60' font-weight='bold' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" alt="Althea Logo" />
+      <strong>Althea</strong> - Your Personal Health Interpreter | Generated on ${new Date().toLocaleString()}
+    </p>
     <p>Report ID: ${reportMetadata.reportId.substring(0, 8)} | Version: ${reportMetadata.version}</p>
     <p style="margin-top: 8px; font-size: 11px;">This report is confidential and intended solely for the patient named above.</p>
   </div>

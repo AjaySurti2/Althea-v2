@@ -310,13 +310,20 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-            Your Health Insights
-          </h2>
-          <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-            AI-powered analysis by Althea
-          </p>
+        <div className="flex items-center space-x-4">
+          <img
+            src="/Althea-Logo-Green.jpg"
+            alt="Althea Logo"
+            className="h-12 w-12 object-contain"
+          />
+          <div>
+            <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              Your Health Insights
+            </h2>
+            <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+              AI-powered analysis by Althea
+            </p>
+          </div>
         </div>
         <button
           onClick={handleRegenerate}

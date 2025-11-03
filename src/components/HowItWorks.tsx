@@ -207,11 +207,18 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16">
-          <h2
-            className={`text-4xl md:text-5xl font-bold mb-4 transition-all duration-500 ${darkMode ? 'text-white' : 'text-gray-900'}`}
-          >
-            How Althea Works
-          </h2>
+          <div className="flex items-center justify-center space-x-4 mb-6">
+            <img
+              src="/Althea-Logo-Green.jpg"
+              alt="Althea Logo"
+              className="h-16 w-16 object-contain"
+            />
+            <h2
+              className={`text-4xl md:text-5xl font-bold transition-all duration-500 ${darkMode ? 'text-white' : 'text-gray-900'}`}
+            >
+              How Althea Works
+            </h2>
+          </div>
           <p
             className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'} max-w-3xl mx-auto mb-6 transition-all duration-500`}
           >
@@ -337,6 +344,106 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
                   <span>{feature}</span>
                 </span>
               ))}
+            </div>
+          </div>
+
+          {/* Step Visualization */}
+          <div className="mb-8">
+            <div className={`relative rounded-xl overflow-hidden border-2 ${
+              darkMode ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-white'
+            }`}>
+              <div className="absolute top-4 right-4 z-10">
+                <img
+                  src="/Althea-Logo-Green.jpg"
+                  alt="Althea"
+                  className="h-8 w-8 object-contain opacity-60"
+                />
+              </div>
+              <div className={`p-8 ${darkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+                    {React.createElement(steps[currentStep].icon, { className: "w-6 h-6 text-white" })}
+                  </div>
+                  <h4 className={`text-lg font-bold ${
+                    darkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    {steps[currentStep].title} - Live Preview
+                  </h4>
+                </div>
+                <p className={`text-sm mb-4 ${
+                  darkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  This is what you'll see in your Althea dashboard:
+                </p>
+                <div className={`rounded-lg p-6 border-2 border-dashed ${
+                  darkMode ? 'border-gray-600 bg-gray-800/50' : 'border-green-300 bg-white'
+                }`}>
+                  {currentStep === 0 && (
+                    <div className="space-y-3">
+                      <div className={`flex items-center space-x-3 p-3 rounded-lg ${
+                        darkMode ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}>
+                        <Upload className="w-5 h-5 text-green-500" />
+                        <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Drop your medical documents here or click to browse</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className={`p-2 rounded text-xs text-center ${
+                          darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                        }`}>lab_results.pdf</div>
+                        <div className={`p-2 rounded text-xs text-center ${
+                          darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                        }`}>prescription.jpg</div>
+                      </div>
+                    </div>
+                  )}
+                  {currentStep === 1 && (
+                    <div className="space-y-4">
+                      <div>
+                        <p className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Select Your Tone:</p>
+                        <div className="flex gap-2">
+                          <div className="px-3 py-2 rounded-lg bg-green-500 text-white text-xs font-medium">Friendly</div>
+                          <div className={`px-3 py-2 rounded-lg text-xs font-medium ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'}`}>Professional</div>
+                          <div className={`px-3 py-2 rounded-lg text-xs font-medium ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'}`}>Empathetic</div>
+                        </div>
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Language Level:</p>
+                        <div className="flex gap-2">
+                          <div className="px-3 py-2 rounded-lg bg-green-500 text-white text-xs font-medium">Basic</div>
+                          <div className={`px-3 py-2 rounded-lg text-xs font-medium ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'}`}>Intermediate</div>
+                          <div className={`px-3 py-2 rounded-lg text-xs font-medium ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'}`}>Professional</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {currentStep === 2 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full" />
+                        <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Analyzing your health data with AI...</span>
+                      </div>
+                      <div className={`p-3 rounded-lg ${darkMode ? 'bg-green-900/30 border border-green-800' : 'bg-green-50 border border-green-200'}`}>
+                        <p className={`text-xs ${darkMode ? 'text-green-400' : 'text-green-700'}`}>Extracting key health metrics</p>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                          <div className="bg-green-500 h-2 rounded-full" style={{width: '75%'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {currentStep === 3 && (
+                    <div className="space-y-3">
+                      <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                        <p className={`text-xs font-semibold mb-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>Your Health Summary</p>
+                        <p className={`text-xs ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Your recent lab results show overall good health with a few areas to discuss with your doctor...</p>
+                      </div>
+                      <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm font-medium">
+                        <Download className="w-4 h-4" />
+                        <span>Download Your Report</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
