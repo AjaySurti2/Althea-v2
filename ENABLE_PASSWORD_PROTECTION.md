@@ -1,8 +1,13 @@
-# Enable Password Leak Protection - Action Required
+# Enable Password Protection Against Leaked Passwords
 
-## ⚠️ IMPORTANT: Manual Configuration Required
+**Date**: November 3, 2025
+**Status**: ⚠️ REQUIRES MANUAL CONFIGURATION
 
-One security setting cannot be enabled via SQL migrations and requires manual action in the Supabase Dashboard.
+---
+
+## Overview
+
+Supabase Auth can check passwords against the HaveIBeenPwned database to prevent users from using compromised passwords. This feature must be enabled through the Supabase Dashboard as it's a configuration setting for the Auth service, not a database setting.
 
 ---
 
