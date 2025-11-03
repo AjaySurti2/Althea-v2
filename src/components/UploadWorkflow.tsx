@@ -954,23 +954,38 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     <div className={`fixed inset-0 z-50 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <div className="min-h-screen px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          <div className={`sticky top-0 z-20 py-6 mb-2 flex items-center justify-between ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-            <div>
-              <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Althea : Your Personal Health Interpreter
-              </h1>
-              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Step {currentStep + 1} of 5
-              </p>
+          <div className={`sticky top-0 z-20 py-6 mb-2 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                {/* Logo */}
+                <div className="mb-4">
+                  <img
+                    src="/Althea-Logo-Green.jpg"
+                    alt="Althea Logo"
+                    className="h-16 w-auto object-contain"
+                  />
+                </div>
+
+                {/* Title */}
+                <div>
+                  <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Althea : Your Personal Health Interpreter
+                  </h1>
+                  <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Step {currentStep + 1} of 5
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={onCancel}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
-            <button
-              onClick={onCancel}
-              className={`p-2 rounded-lg transition-colors ${
-                darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-              }`}
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
 
           {apiKeyStatus && apiKeyStatus.configured && apiKeyStatus.working && (
