@@ -10,6 +10,21 @@ const corsHeaders = {
 interface ParseRequest {
   sessionId: string;
   fileIds: string[];
+  forceReparse?: boolean;
+}
+
+interface ParseResult {
+  fileId: string;
+  fileName: string;
+  status: 'success' | 'skipped' | 'error';
+  reason?: string;
+  patient?: string;
+  labReport?: string;
+  testCount?: number;
+  provider?: string;
+  attemptNumber?: number;
+  duration?: number;
+  alreadyParsed?: boolean;
 }
 
 // Medical report parsing prompt
@@ -68,18 +83,35 @@ VALIDATION RULES:
 - Status must be one of: NORMAL, HIGH, LOW, CRITICAL, PENDING
 - Extract all visible test results`;
 
-// Extract text from PDF or image using OpenAI
-async function extractTextFromFile(
+// Check if file is already parsed
+async function checkAlreadyParsed(supabase: any, fileId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("parsed_documents")
+    .select("id, parsing_status")
+    .eq("file_id", fileId)
+    .eq("parsing_status", "completed")
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`Error checking parsed status for ${fileId}:`, error.message);
+    return false;
+  }
+
+  return !!data;
+}
+
+// Extract text from image using OpenAI (optimized for speed)
+async function extractTextWithOpenAI(
   arrayBuffer: ArrayBuffer,
   fileType: string,
   fileName: string
-): Promise<string> {
+): Promise<{ text: string; cost: number; tokens: number }> {
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (!openaiKey) {
     throw new Error("OPENAI_API_KEY not configured");
   }
 
-  console.log(`🔍 Extracting text from ${fileName} (${fileType})`);
+  console.log(`🔍 [OpenAI] Extracting text from ${fileName}`);
 
   // Convert to base64 in chunks
   const uint8Array = new Uint8Array(arrayBuffer);
@@ -91,61 +123,145 @@ async function extractTextFromFile(
   }
   const base64Data = btoa(binary);
 
-  console.log(`📦 Base64 size: ${base64Data.length} chars`);
-
-  try {
-    // Use gpt-4o-mini with vision for both images and PDFs
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${openaiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${fileType};base64,${base64Data}`,
-                  detail: "high"
-                },
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${fileType};base64,${base64Data}`,
+                detail: "low" // Changed from "high" to "low" for faster processing
               },
-              {
-                type: "text",
-                text: "Extract ALL text from this medical report. Include patient information, lab details, all test names, values, units, and reference ranges. Preserve exact formatting and numbers.",
-              },
-            ],
-          },
-        ],
-        max_tokens: 4096,
-      }),
-    });
+            },
+            {
+              type: "text",
+              text: "Extract ALL text from this medical report. Include patient information, lab details, all test names, values, units, and reference ranges. Be accurate and complete.",
+            },
+          ],
+        },
+      ],
+      max_tokens: 2048, // Reduced from 4096 for faster response
+    }),
+  });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error(`❌ OpenAI extraction failed: ${response.status}`, error);
-      throw new Error(`OpenAI API error ${response.status}: ${error.substring(0, 200)}`);
-    }
-
-    const result = await response.json();
-    const extractedText = result.choices?.[0]?.message?.content || "";
-
-    if (!extractedText || extractedText.length < 50) {
-      throw new Error(`Insufficient text extracted (${extractedText.length} chars)`);
-    }
-
-    console.log(`✅ Extracted ${extractedText.length} characters`);
-    console.log(`📄 Text preview: ${extractedText.substring(0, 300)}...`);
-
-    return extractedText;
-  } catch (error: any) {
-    console.error("❌ Text extraction error:", error.message);
-    throw error;
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI API error ${response.status}: ${error.substring(0, 200)}`);
   }
+
+  const result = await response.json();
+  const extractedText = result.choices?.[0]?.message?.content || "";
+  const usage = result.usage || {};
+
+  // Estimate cost: gpt-4o-mini with vision
+  const inputCost = (usage.prompt_tokens || 0) * 0.15 / 1_000_000;
+  const outputCost = (usage.completion_tokens || 0) * 0.60 / 1_000_000;
+  const totalCost = inputCost + outputCost;
+
+  if (!extractedText || extractedText.length < 50) {
+    throw new Error(`Insufficient text extracted (${extractedText.length} chars)`);
+  }
+
+  console.log(`✅ [OpenAI] Extracted ${extractedText.length} chars, $${totalCost.toFixed(4)}`);
+
+  return {
+    text: extractedText,
+    cost: totalCost,
+    tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+  };
+}
+
+// Extract text using Claude (fallback)
+async function extractTextWithClaude(
+  arrayBuffer: ArrayBuffer,
+  fileType: string,
+  fileName: string
+): Promise<{ text: string; cost: number; tokens: number }> {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!anthropicKey) {
+    throw new Error("ANTHROPIC_API_KEY not configured");
+  }
+
+  console.log(`🔍 [Claude] Extracting text from ${fileName}`);
+
+  // Convert to base64
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  const base64Data = btoa(binary);
+
+  const mediaType = fileType.includes("png") ? "image/png" : fileType.includes("jpeg") || fileType.includes("jpg") ? "image/jpeg" : "image/webp";
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-3-haiku-20240307",
+      max_tokens: 2048,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mediaType,
+                data: base64Data,
+              },
+            },
+            {
+              type: "text",
+              text: "Extract ALL text from this medical report. Include patient information, lab details, all test names, values, units, and reference ranges. Be accurate and complete.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Claude API error ${response.status}: ${error.substring(0, 200)}`);
+  }
+
+  const result = await response.json();
+  const extractedText = result.content?.[0]?.text || "";
+  const usage = result.usage || {};
+
+  // Estimate cost: Claude Haiku
+  const inputCost = (usage.input_tokens || 0) * 0.25 / 1_000_000;
+  const outputCost = (usage.output_tokens || 0) * 1.25 / 1_000_000;
+  const totalCost = inputCost + outputCost;
+
+  if (!extractedText || extractedText.length < 50) {
+    throw new Error(`Insufficient text extracted (${extractedText.length} chars)`);
+  }
+
+  console.log(`✅ [Claude] Extracted ${extractedText.length} chars, $${totalCost.toFixed(4)}`);
+
+  return {
+    text: extractedText,
+    cost: totalCost,
+    tokens: (usage.input_tokens || 0) + (usage.output_tokens || 0)
+  };
 }
 
 // Parse extracted text with OpenAI
@@ -159,115 +275,174 @@ async function parseWithOpenAI(
     throw new Error("OPENAI_API_KEY not configured");
   }
 
-  console.log(`🤖 Parsing attempt ${attemptNumber} for ${fileName}`);
+  console.log(`🤖 [OpenAI] Parsing attempt ${attemptNumber} for ${fileName}`);
 
-  // Modify prompt for retry attempts
   let systemPrompt = PARSING_PROMPT;
   if (attemptNumber === 2) {
-    systemPrompt += "\n\nIMPORTANT: Previous attempt failed validation. Be extra careful to extract REAL data only. Check patient name is real, all test values are valid numbers, and dates are properly formatted.";
+    systemPrompt += "\n\nIMPORTANT: Previous attempt failed validation. Extract REAL data only. Check patient name is real, all test values are valid numbers, and dates are properly formatted.";
   } else if (attemptNumber === 3) {
     systemPrompt += "\n\nFINAL ATTEMPT: Extract data with maximum accuracy. If any field is unclear, leave it empty rather than using placeholder values.";
   }
 
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${openaiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: `Extract data from this medical report:\n\n${documentText.substring(0, 12000)}`,
-          },
-        ],
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-      }),
-    });
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: `Extract data from this medical report:\n\n${documentText.substring(0, 12000)}`,
+        },
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+    }),
+  });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error(`❌ OpenAI parsing failed: ${response.status}`, error);
-      throw new Error(`OpenAI API error ${response.status}`);
-    }
-
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content || "{}";
-
-    console.log(`📋 Raw AI Response (attempt ${attemptNumber}):`);
-    console.log(content);
-
-    const parsed = JSON.parse(content);
-
-    // Validate parsed data
-    const validation = validateParsedData(parsed);
-
-    if (!validation.isValid && attemptNumber < 3) {
-      console.warn(`⚠️ Validation failed (attempt ${attemptNumber}):`, validation.issues);
-      console.log(`🔄 Retrying with modified prompt...`);
-      return await parseWithOpenAI(documentText, fileName, attemptNumber + 1);
-    }
-
-    return {
-      parsed,
-      attemptNumber,
-      validation,
-    };
-  } catch (error: any) {
-    console.error(`❌ Parsing error (attempt ${attemptNumber}):`, error.message);
-
-    if (attemptNumber < 3) {
-      console.log(`🔄 Retrying...`);
-      return await parseWithOpenAI(documentText, fileName, attemptNumber + 1);
-    }
-
-    throw error;
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI API error ${response.status}`);
   }
+
+  const result = await response.json();
+  const content = result.choices?.[0]?.message?.content || "{}";
+  const usage = result.usage || {};
+
+  const parsed = JSON.parse(content);
+  const validation = validateParsedData(parsed);
+
+  const inputCost = (usage.prompt_tokens || 0) * 0.15 / 1_000_000;
+  const outputCost = (usage.completion_tokens || 0) * 0.60 / 1_000_000;
+  const totalCost = inputCost + outputCost;
+
+  if (!validation.isValid && attemptNumber < 3) {
+    console.warn(`⚠️ [OpenAI] Validation failed (attempt ${attemptNumber}):`, validation.issues);
+    console.log(`🔄 Retrying with modified prompt...`);
+    return await parseWithOpenAI(documentText, fileName, attemptNumber + 1);
+  }
+
+  return {
+    parsed,
+    attemptNumber,
+    validation,
+    cost: totalCost,
+    tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+    provider: 'openai'
+  };
+}
+
+// Parse extracted text with Claude (fallback)
+async function parseWithClaude(
+  documentText: string,
+  fileName: string,
+  attemptNumber: number = 1
+): Promise<any> {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!anthropicKey) {
+    throw new Error("ANTHROPIC_API_KEY not configured");
+  }
+
+  console.log(`🤖 [Claude] Parsing attempt ${attemptNumber} for ${fileName}`);
+
+  let systemPrompt = PARSING_PROMPT;
+  if (attemptNumber === 2) {
+    systemPrompt += "\n\nIMPORTANT: Previous attempt failed validation. Extract REAL data only.";
+  }
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-3-haiku-20240307",
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: `Extract data from this medical report and return ONLY valid JSON:\n\n${documentText.substring(0, 12000)}`,
+        },
+      ],
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Claude API error ${response.status}`);
+  }
+
+  const result = await response.json();
+  const content = result.content?.[0]?.text || "{}";
+  const usage = result.usage || {};
+
+  // Extract JSON from response
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  const jsonContent = jsonMatch ? jsonMatch[0] : content;
+  const parsed = JSON.parse(jsonContent);
+  const validation = validateParsedData(parsed);
+
+  const inputCost = (usage.input_tokens || 0) * 0.25 / 1_000_000;
+  const outputCost = (usage.output_tokens || 0) * 1.25 / 1_000_000;
+  const totalCost = inputCost + outputCost;
+
+  if (!validation.isValid && attemptNumber < 2) {
+    console.warn(`⚠️ [Claude] Validation failed (attempt ${attemptNumber}):`, validation.issues);
+    console.log(`🔄 Retrying...`);
+    return await parseWithClaude(documentText, fileName, attemptNumber + 1);
+  }
+
+  return {
+    parsed,
+    attemptNumber,
+    validation,
+    cost: totalCost,
+    tokens: (usage.input_tokens || 0) + (usage.output_tokens || 0),
+    provider: 'anthropic'
+  };
 }
 
 // Validate parsed data
 function validateParsedData(data: any): { isValid: boolean; issues: string[] } {
   const issues: string[] = [];
 
-  // Check patient name
   const patientName = data.patient?.name?.toLowerCase() || "";
   const invalidNames = ["john doe", "jane doe", "patient name", "sample", "test patient", "name"];
   if (!patientName || invalidNames.some((n) => patientName.includes(n))) {
     issues.push("Invalid or placeholder patient name");
   }
 
-  // Check for panels and tests
   if (!data.panels || !Array.isArray(data.panels) || data.panels.length === 0) {
     issues.push("No panels extracted");
   } else {
     let totalTests = 0;
     for (const panel of data.panels) {
       if (!panel.tests || !Array.isArray(panel.tests)) {
-        issues.push(`Panel "${panel.panel_name || 'unknown'}" has no tests`);
         continue;
       }
       totalTests += panel.tests.length;
 
-      // Check for invalid test data
       const invalidTests = panel.tests.filter((t: any) =>
         !t.value ||
         t.value === "N/A" ||
         t.value === "XX" ||
         t.value === "" ||
-        t.test_name?.toLowerCase().includes("sample") ||
-        t.test_name?.toLowerCase().includes("test name")
+        t.test_name?.toLowerCase().includes("sample")
       );
 
       if (invalidTests.length > 0) {
-        issues.push(`${invalidTests.length} invalid/placeholder tests in panel "${panel.panel_name}"`);
+        issues.push(`${invalidTests.length} invalid tests in panel "${panel.panel_name}"`);
       }
     }
 
@@ -276,7 +451,6 @@ function validateParsedData(data: any): { isValid: boolean; issues: string[] } {
     }
   }
 
-  // Check lab details
   if (!data.lab_details?.lab_name || data.lab_details.lab_name.toLowerCase().includes("sample")) {
     issues.push("Invalid or missing lab name");
   }
@@ -287,21 +461,16 @@ function validateParsedData(data: any): { isValid: boolean; issues: string[] } {
   };
 }
 
-// Validate and format date to YYYY-MM-DD or return null
+// Validate and format date
 function validateDate(dateStr: string | null | undefined): string | null {
   if (!dateStr || typeof dateStr !== 'string') return null;
 
-  // Already in YYYY-MM-DD format
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return dateStr;
   }
 
-  // Try to parse various date formats
   try {
-    // Remove any extra whitespace
     dateStr = dateStr.trim();
-
-    // Try DD/MM/YYYY or DD-MM-YYYY
     const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (ddmmyyyy) {
       const day = ddmmyyyy[1].padStart(2, '0');
@@ -310,47 +479,8 @@ function validateDate(dateStr: string | null | undefined): string | null {
       return `${year}-${month}-${day}`;
     }
 
-    // Try MM/DD/YYYY or MM-DD-YYYY
-    const mmddyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if (mmddyyyy) {
-      const month = mmddyyyy[1].padStart(2, '0');
-      const day = mmddyyyy[2].padStart(2, '0');
-      const year = mmddyyyy[3];
-      // Assume DD/MM/YYYY is more common in medical reports
-      return `${year}-${month}-${day}`;
-    }
-
-    // Try DD Mon YYYY or DD Month YYYY
-    const monthNames: { [key: string]: string } = {
-      'jan': '01', 'january': '01',
-      'feb': '02', 'february': '02',
-      'mar': '03', 'march': '03',
-      'apr': '04', 'april': '04',
-      'may': '05',
-      'jun': '06', 'june': '06',
-      'jul': '07', 'july': '07',
-      'aug': '08', 'august': '08',
-      'sep': '09', 'sept': '09', 'september': '09',
-      'oct': '10', 'october': '10',
-      'nov': '11', 'november': '11',
-      'dec': '12', 'december': '12'
-    };
-
-    const monthPattern = dateStr.match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/i);
-    if (monthPattern) {
-      const day = monthPattern[1].padStart(2, '0');
-      const monthStr = monthPattern[2].toLowerCase();
-      const year = monthPattern[3];
-      const month = monthNames[monthStr];
-      if (month) {
-        return `${year}-${month}-${day}`;
-      }
-    }
-
-    console.warn(`⚠️ Could not parse date: "${dateStr}"`);
     return null;
-  } catch (error) {
-    console.warn(`⚠️ Date parsing error for "${dateStr}":`, error);
+  } catch {
     return null;
   }
 }
@@ -362,7 +492,6 @@ function calculateStatus(value: string, rangeMin: string, rangeMax: string, rang
   const numValue = parseFloat(value.replace(/[^0-9.]/g, ""));
   if (isNaN(numValue)) return "PENDING";
 
-  // Try to parse from min/max
   if (rangeMin && rangeMax) {
     const min = parseFloat(rangeMin);
     const max = parseFloat(rangeMax);
@@ -375,7 +504,6 @@ function calculateStatus(value: string, rangeMin: string, rangeMax: string, rang
     }
   }
 
-  // Try to parse from range text
   if (rangeText) {
     const rangeMatch = rangeText.match(/([\d.]+)\s*[-–to]\s*([\d.]+)/i);
     if (rangeMatch) {
@@ -393,11 +521,14 @@ function calculateStatus(value: string, rangeMin: string, rangeMax: string, rang
 }
 
 // Save parsed data to database
-async function saveToDatabase(supabase: any, fileData: any, sessionId: string, parsedResult: any) {
-  const { parsed, attemptNumber, validation } = parsedResult;
+async function saveToDatabase(supabase: any, fileData: any, sessionId: string, parsedResult: any, startTime: number, extractCost: number, extractTokens: number) {
+  const { parsed, attemptNumber, validation, cost, tokens, provider } = parsedResult;
   const userId = fileData.user_id;
+  const duration = Date.now() - startTime;
+  const totalCost = (cost || 0) + extractCost;
+  const totalTokens = (tokens || 0) + extractTokens;
 
-  console.log(`💾 Saving to database...`);
+  console.log(`💾 Saving to database (${provider}, ${duration}ms, $${totalCost.toFixed(4)})`);
 
   // 1. Save or get patient
   const patientName = parsed.patient?.name || "Unknown Patient";
@@ -428,17 +559,12 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
       console.error("❌ Patient insert error:", patientError);
     } else {
       patient = newPatient;
-      console.log(`✅ Created patient: ${patientName}`);
     }
-  } else {
-    console.log(`✅ Found existing patient: ${patientName}`);
   }
 
-  // 2. Save lab report with validated dates
+  // 2. Save lab report
   const reportDate = validateDate(parsed.lab_details?.report_date);
   const testDate = validateDate(parsed.lab_details?.test_date);
-
-  console.log(`📅 Dates - Report: ${reportDate}, Test: ${testDate}`);
 
   const { data: labReport, error: labReportError } = await supabase
     .from("lab_reports")
@@ -462,9 +588,7 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
     throw labReportError;
   }
 
-  console.log(`✅ Created lab report: ${labReport.id}`);
-
-  // 3. Save test results from all panels
+  // 3. Save test results
   let totalTests = 0;
   for (const panel of parsed.panels || []) {
     for (const test of panel.tests || []) {
@@ -491,18 +615,13 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
           is_flagged: ["HIGH", "LOW", "CRITICAL", "ABNORMAL"].includes(status),
         });
 
-      if (testError) {
-        console.error(`❌ Test result insert error for ${test.test_name}:`, testError);
-      } else {
+      if (!testError) {
         totalTests++;
       }
     }
   }
 
-  console.log(`✅ Inserted ${totalTests} test results`);
-
   // 4. Save parsed_documents entry
-  // Flatten panels into key_metrics and test_results arrays for backward compatibility
   const key_metrics = [];
   const test_results = [];
 
@@ -557,9 +676,14 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
     user_id: userId,
     parsing_status: "completed",
     structured_data,
+    parsing_started_at: new Date(startTime).toISOString(),
+    parsing_completed_at: new Date().toISOString(),
+    parsing_provider: provider,
+    parsing_attempts: attemptNumber,
+    parsing_duration_ms: duration,
+    estimated_cost: totalCost,
+    tokens_used: totalTokens,
     metadata: {
-      ai_model: "gpt-4o-mini",
-      attempt_number: attemptNumber,
       validation: validation,
     },
   });
@@ -568,7 +692,142 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
     patient,
     labReport,
     testCount: totalTests,
+    duration,
+    cost: totalCost,
   };
+}
+
+// Process single file
+async function processSingleFile(
+  supabase: any,
+  fileId: string,
+  sessionId: string,
+  forceReparse: boolean
+): Promise<ParseResult> {
+  const startTime = Date.now();
+
+  try {
+    console.log(`\n📄 Processing file: ${fileId}`);
+
+    // Check if already parsed
+    if (!forceReparse) {
+      const alreadyParsed = await checkAlreadyParsed(supabase, fileId);
+      if (alreadyParsed) {
+        console.log(`⏭️  File ${fileId} already parsed, skipping`);
+        return {
+          fileId,
+          fileName: "Unknown",
+          status: 'skipped',
+          reason: 'Already parsed',
+          alreadyParsed: true,
+        };
+      }
+    }
+
+    // Get file metadata
+    const { data: fileData, error: fileError } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .single();
+
+    if (fileError || !fileData) {
+      throw new Error("File not found in database");
+    }
+
+    console.log(`📁 File: ${fileData.file_name} (${fileData.file_type})`);
+
+    // Download file from storage
+    let downloadData = null;
+    const medicalFilesResult = await supabase.storage
+      .from("medical-files")
+      .download(fileData.storage_path);
+
+    if (!medicalFilesResult.error) {
+      downloadData = medicalFilesResult.data;
+    } else {
+      const reportsResult = await supabase.storage
+        .from("report-pdfs")
+        .download(fileData.storage_path);
+
+      if (!reportsResult.error) {
+        downloadData = reportsResult.data;
+      } else {
+        throw new Error("File download failed");
+      }
+    }
+
+    const arrayBuffer = await downloadData.arrayBuffer();
+
+    // Try OpenAI first, fallback to Claude
+    let documentText = "";
+    let extractCost = 0;
+    let extractTokens = 0;
+    let extractProvider = "openai";
+
+    try {
+      const openaiResult = await extractTextWithOpenAI(arrayBuffer, fileData.file_type, fileData.file_name);
+      documentText = openaiResult.text;
+      extractCost = openaiResult.cost;
+      extractTokens = openaiResult.tokens;
+      extractProvider = "openai";
+    } catch (openaiError: any) {
+      console.warn(`⚠️ OpenAI extraction failed: ${openaiError.message}`);
+      console.log(`🔄 Falling back to Claude...`);
+
+      const claudeResult = await extractTextWithClaude(arrayBuffer, fileData.file_type, fileData.file_name);
+      documentText = claudeResult.text;
+      extractCost = claudeResult.cost;
+      extractTokens = claudeResult.tokens;
+      extractProvider = "anthropic";
+    }
+
+    // Parse with same provider or fallback
+    let parsedResult;
+    try {
+      if (extractProvider === "openai") {
+        parsedResult = await parseWithOpenAI(documentText, fileData.file_name);
+      } else {
+        parsedResult = await parseWithClaude(documentText, fileData.file_name);
+      }
+    } catch (parseError: any) {
+      console.warn(`⚠️ ${extractProvider} parsing failed: ${parseError.message}`);
+
+      // Try the other provider
+      if (extractProvider === "openai") {
+        console.log(`🔄 Falling back to Claude for parsing...`);
+        parsedResult = await parseWithClaude(documentText, fileData.file_name);
+      } else {
+        console.log(`🔄 Falling back to OpenAI for parsing...`);
+        parsedResult = await parseWithOpenAI(documentText, fileData.file_name);
+      }
+    }
+
+    // Save to database
+    const saved = await saveToDatabase(supabase, fileData, sessionId, parsedResult, startTime, extractCost, extractTokens);
+
+    console.log(`✅ Successfully processed ${fileData.file_name} in ${saved.duration}ms`);
+
+    return {
+      fileId: fileData.id,
+      fileName: fileData.file_name,
+      status: 'success',
+      patient: saved.patient?.name,
+      labReport: saved.labReport?.lab_name,
+      testCount: saved.testCount,
+      provider: parsedResult.provider,
+      attemptNumber: parsedResult.attemptNumber,
+      duration: saved.duration,
+    };
+  } catch (error: any) {
+    console.error(`❌ Error processing file ${fileId}:`, error.message);
+    return {
+      fileId,
+      fileName: "Unknown",
+      status: 'error',
+      reason: error.message,
+    };
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -579,7 +838,7 @@ Deno.serve(async (req: Request) => {
   try {
     console.log("=== Parse Medical Report Request Started ===");
 
-    const { sessionId, fileIds }: ParseRequest = await req.json();
+    const { sessionId, fileIds, forceReparse = false }: ParseRequest = await req.json();
 
     if (!sessionId || !fileIds || fileIds.length === 0) {
       return new Response(
@@ -588,107 +847,36 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`📋 Session: ${sessionId}, Files: ${fileIds.length}`);
+    console.log(`📋 Session: ${sessionId}, Files: ${fileIds.length}, Force reparse: ${forceReparse}`);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const results = [];
-    const errors = [];
+    // Process files in parallel with Promise.all
+    console.log(`🚀 Processing ${fileIds.length} files in parallel...`);
+    const results = await Promise.all(
+      fileIds.map(fileId => processSingleFile(supabase, fileId, sessionId, forceReparse))
+    );
 
-    for (const fileId of fileIds) {
-      try {
-        console.log(`\n📄 Processing file: ${fileId}`);
-
-        // Get file metadata
-        const { data: fileData, error: fileError } = await supabase
-          .from("files")
-          .select("*")
-          .eq("id", fileId)
-          .single();
-
-        if (fileError || !fileData) {
-          console.error("❌ File not found in database");
-          errors.push({ fileId, error: "File not found" });
-          continue;
-        }
-
-        console.log(`📁 File: ${fileData.file_name} (${fileData.file_type})`);
-
-        // Download file from storage (check both buckets)
-        let downloadData = null;
-        let downloadError = null;
-
-        // Try medical-files bucket first
-        const medicalFilesResult = await supabase.storage
-          .from("medical-files")
-          .download(fileData.storage_path);
-
-        if (!medicalFilesResult.error) {
-          downloadData = medicalFilesResult.data;
-        } else {
-          // Try report-pdfs bucket as fallback
-          const reportsResult = await supabase.storage
-            .from("report-pdfs")
-            .download(fileData.storage_path);
-
-          if (!reportsResult.error) {
-            downloadData = reportsResult.data;
-          } else {
-            downloadError = reportsResult.error;
-          }
-        }
-
-        if (downloadError || !downloadData) {
-          console.error("❌ Download failed:", downloadError);
-          errors.push({ fileId, error: "File download failed" });
-          continue;
-        }
-
-        const arrayBuffer = await downloadData.arrayBuffer();
-        console.log(`✅ Downloaded ${arrayBuffer.byteLength} bytes`);
-
-        // Extract text from file
-        const documentText = await extractTextFromFile(
-          arrayBuffer,
-          fileData.file_type,
-          fileData.file_name
-        );
-
-        // Parse with OpenAI
-        const parsedResult = await parseWithOpenAI(documentText, fileData.file_name);
-
-        // Save to database
-        const saved = await saveToDatabase(supabase, fileData, sessionId, parsedResult);
-
-        results.push({
-          fileId: fileData.id,
-          fileName: fileData.file_name,
-          patient: saved.patient?.name,
-          labReport: saved.labReport?.lab_name,
-          testCount: saved.testCount,
-          attemptNumber: parsedResult.attemptNumber,
-          validation: parsedResult.validation,
-        });
-
-        console.log(`✅ Successfully processed ${fileData.file_name}`);
-      } catch (fileError: any) {
-        console.error(`❌ Error processing file ${fileId}:`, fileError.message);
-        errors.push({ fileId, error: fileError.message });
-      }
-    }
+    const successCount = results.filter(r => r.status === 'success').length;
+    const skippedCount = results.filter(r => r.status === 'skipped').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
 
     console.log("\n=== Processing Complete ===");
-    console.log(`✅ Success: ${results.length}, ❌ Errors: ${errors.length}`);
+    console.log(`✅ Success: ${successCount}, ⏭️  Skipped: ${skippedCount}, ❌ Errors: ${errorCount}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        results,
-        total_processed: results.length,
-        total_requested: fileIds.length,
-        errors: errors.length > 0 ? errors : undefined,
+        results: results.filter(r => r.status === 'success' || r.status === 'skipped'),
+        summary: {
+          total: fileIds.length,
+          successful: successCount,
+          skipped: skippedCount,
+          failed: errorCount,
+        },
+        errors: results.filter(r => r.status === 'error'),
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

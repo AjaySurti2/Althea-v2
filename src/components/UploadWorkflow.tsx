@@ -237,14 +237,32 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         const result = await response.json();
         console.log('Edge function success:', result);
 
+        // Handle the new response format with summary
+        const summary = result.summary || {};
+        console.log(`📊 Parsing Summary: ${summary.successful || 0} successful, ${summary.skipped || 0} skipped, ${summary.failed || 0} failed`);
+
         if (result.errors && result.errors.length > 0) {
           console.error('Edge function returned errors:', result.errors);
-          const errorMessages = result.errors.map((e: any) => e.error).join(', ');
-          throw new Error(`Parsing completed with errors: ${errorMessages}`);
+          const errorMessages = result.errors.map((e: any) => `${e.fileName || 'Unknown'}: ${e.reason}`).join(', ');
+
+          // If some files succeeded, show partial success message
+          if (summary.successful > 0 || summary.skipped > 0) {
+            alert(`Parsing completed with some errors:\n\n✅ ${summary.successful} file(s) parsed successfully\n⏭️ ${summary.skipped} file(s) already parsed\n❌ ${summary.failed} file(s) failed\n\nErrors: ${errorMessages}`);
+          } else {
+            throw new Error(`All files failed to parse: ${errorMessages}`);
+          }
         }
 
         if (!result.results || result.results.length === 0) {
-          throw new Error('No documents were successfully parsed. Please check if OPENAI_API_KEY is configured in Supabase Edge Functions secrets.');
+          if (summary.total === summary.failed) {
+            throw new Error('All documents failed to parse. Please check if OPENAI_API_KEY or ANTHROPIC_API_KEY is configured in Supabase Edge Functions secrets.');
+          }
+          throw new Error('No documents were successfully parsed.');
+        }
+
+        // Show success message with stats
+        if (summary.skipped > 0) {
+          console.log(`ℹ️ ${summary.skipped} file(s) were already parsed and skipped`);
         }
 
         setParsingInProgress(false);
@@ -1169,7 +1187,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                       {processing ? 'Uploading files...' : 'Parsing documents with AI...'}
                     </p>
                     <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {processing ? 'Please wait while we upload your documents' : 'Extracting health information from your documents'}
+                      {processing
+                        ? 'Please wait while we upload your documents'
+                        : `Processing ${files.length} file${files.length !== 1 ? 's' : ''} in parallel with OpenAI (fallback to Claude if needed)`
+                      }
                     </p>
                   </div>
                 )}
