@@ -11,6 +11,8 @@ interface ReportRequest {
   sessionId: string;
   reportType?: string;
   includeQuestions?: boolean;
+  forceRegenerate?: boolean;
+  insightsId?: string;
 }
 
 interface ReportSection {
@@ -649,7 +651,13 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { sessionId, reportType = "comprehensive", includeQuestions = true }: ReportRequest = await req.json();
+    const {
+      sessionId,
+      reportType = "comprehensive",
+      includeQuestions = true,
+      forceRegenerate = false,
+      insightsId
+    }: ReportRequest = await req.json();
 
     if (!sessionId) {
       return new Response(
@@ -670,7 +678,68 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`Generating health report for session: ${sessionId}`);
+    console.log(`Processing report request for session: ${sessionId}, forceRegenerate: ${forceRegenerate}`);
+
+    // Get existing insights to check for cached report
+    const { data: existingInsights } = await supabase
+      .from("health_insights")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Check if report already exists and should be reused
+    if (!forceRegenerate && existingInsights?.report_id && existingInsights?.report_storage_path) {
+      console.log(`Found cached report: ${existingInsights.report_id}, returning existing report`);
+
+      // Verify the report still exists in storage
+      const { data: reportExists } = await supabase.storage
+        .from("health-reports")
+        .list(existingInsights.report_storage_path.split('/')[0], {
+          search: existingInsights.report_storage_path.split('/')[1]
+        });
+
+      if (reportExists && reportExists.length > 0) {
+        // Get the report from database
+        const { data: existingReport } = await supabase
+          .from("health_reports")
+          .select("*")
+          .eq("id", existingInsights.report_id)
+          .maybeSingle();
+
+        // Get questions
+        const { data: existingQuestions } = await supabase
+          .from("report_questions")
+          .select("*")
+          .eq("report_id", existingInsights.report_id)
+          .order("sort_order", { ascending: true });
+
+        // Log access
+        await supabase.from("report_access_log").insert({
+          report_id: existingInsights.report_id,
+          user_id: existingInsights.user_id,
+          action: "reused_cached",
+          accessed_at: new Date().toISOString()
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            cached: true,
+            report: existingReport,
+            questions: existingQuestions || [],
+            storage_path: existingInsights.report_storage_path,
+            download_url: `${supabaseUrl}/storage/v1/object/public/health-reports/${existingInsights.report_storage_path}`
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else {
+        console.log("Cached report file not found in storage, regenerating...");
+      }
+    }
+
+    console.log(`Generating new report for session: ${sessionId}`);
 
     // Get lab reports and test results
     const { data: labReports, error: reportsError } = await supabase
@@ -697,13 +766,6 @@ Deno.serve(async (req: Request) => {
       .from("patients")
       .select("*")
       .eq("id", patientId)
-      .maybeSingle();
-
-    // Get existing insights
-    const { data: existingInsights } = await supabase
-      .from("health_insights")
-      .select("*")
-      .eq("session_id", sessionId)
       .maybeSingle();
 
     console.log(`Generating report content for ${testResults?.length || 0} tests`);
@@ -784,6 +846,21 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Update health_insights with report reference (cache it)
+    if (existingInsights?.id) {
+      await supabase
+        .from("health_insights")
+        .update({
+          report_id: reportId,
+          report_storage_path: storagePath,
+          report_generated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existingInsights.id);
+
+      console.log(`Updated health_insights ${existingInsights.id} with report reference ${reportId}`);
+    }
+
     // Log access
     await supabase.from("report_access_log").insert({
       report_id: reportId,
@@ -795,6 +872,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
+        cached: false,
         report: savedReport,
         questions: questions,
         storage_path: storagePath,

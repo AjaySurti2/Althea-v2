@@ -56,6 +56,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   const [tone, setTone] = useState('conversational');
   const [languageLevel, setLanguageLevel] = useState('simple_terms');
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportStoragePath, setReportStoragePath] = useState<string | null>(null);
+  const [reportCached, setReportCached] = useState(false);
 
   useEffect(() => {
     loadInsights();
@@ -80,6 +82,12 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         setInsights(existingInsights.insights_data);
         setTone(existingInsights.tone);
         setLanguageLevel(existingInsights.language_level);
+
+        // Check if report is already cached
+        if (existingInsights.report_storage_path) {
+          setReportStoragePath(existingInsights.report_storage_path);
+          setReportCached(true);
+        }
       } else {
         await generateInsights();
       }
@@ -156,37 +164,51 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      console.log('Generating report for session:', sessionId);
+      let storagePath = reportStoragePath;
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-          reportType: 'comprehensive',
-          includeQuestions: true
-        })
-      });
+      // If report is not cached, generate it
+      if (!reportCached) {
+        console.log('Generating report for session:', sessionId);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Report generation failed:', errorData);
-        throw new Error(errorData.error || 'Failed to generate report');
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId,
+            reportType: 'comprehensive',
+            includeQuestions: true
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Report generation failed:', errorData);
+          throw new Error(errorData.error || 'Failed to generate report');
+        }
+
+        const result = await response.json();
+        console.log('Report result:', result.cached ? 'Using cached report' : 'Generated new report');
+
+        if (result.storage_path) {
+          storagePath = result.storage_path;
+          setReportStoragePath(storagePath);
+          setReportCached(true);
+        } else {
+          throw new Error('No storage path returned from report generation');
+        }
+      } else {
+        console.log('Using cached report:', storagePath);
       }
 
-      const result = await response.json();
-      console.log('Report generated successfully:', result);
-
-      // Download the generated HTML report
-      if (result.storage_path) {
-        // Download from Supabase Storage
+      // Download the report from storage
+      if (storagePath) {
         const { data: fileData, error: downloadError } = await supabase.storage
           .from('health-reports')
-          .download(result.storage_path);
+          .download(storagePath);
 
         if (downloadError) {
           console.error('Download error:', downloadError);
@@ -198,7 +220,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           const url = window.URL.createObjectURL(fileData);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `health-report-${sessionId}.html`;
+          a.download = `althea-health-report-${sessionId.substring(0, 8)}.html`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -206,11 +228,9 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
           console.log('Report downloaded successfully');
         }
-      } else {
-        throw new Error('No storage path returned from report generation');
       }
     } catch (err: any) {
-      console.error('Error generating report:', err);
+      console.error('Error with report:', err);
       setError(err.message);
     } finally {
       setGeneratingReport(false);
@@ -567,18 +587,20 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
             className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
               generatingReport
                 ? 'bg-gray-400 cursor-not-allowed'
+                : reportCached
+                ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
             }`}
           >
             {generatingReport ? (
               <>
                 <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                <span>Generating...</span>
+                <span>{reportCached ? 'Downloading...' : 'Generating...'}</span>
               </>
             ) : (
               <>
                 <Download className="w-5 h-5" />
-                <span>Generate & Download Report</span>
+                <span>{reportCached ? 'Download Report' : 'Generate & Download Report'}</span>
               </>
             )}
           </button>

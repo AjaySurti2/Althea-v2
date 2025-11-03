@@ -74,6 +74,10 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
   const [showPreferences, setShowPreferences] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Report caching state
+  const [reportStoragePath, setReportStoragePath] = useState<string | null>(null);
+  const [reportCached, setReportCached] = useState(false);
+
   const toneOptions: ToneOption[] = [
     {
       value: 'friendly',
@@ -180,6 +184,12 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
 
       if (existingInsights) {
         setInsights(existingInsights.insights_data);
+
+        // Check if report is already cached
+        if (existingInsights.report_storage_path) {
+          setReportStoragePath(existingInsights.report_storage_path);
+          setReportCached(true);
+        }
       } else {
         await generateInsights();
       }
@@ -268,33 +278,52 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-          reportType: 'comprehensive',
-          includeQuestions: true,
-          tone,
-          languageLevel
-        })
-      });
+      let storagePath = reportStoragePath;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate report');
+      // If report is not cached, generate it
+      if (!reportCached) {
+        console.log('Generating report for session:', sessionId);
+
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId,
+            reportType: 'comprehensive',
+            includeQuestions: true,
+            tone,
+            languageLevel
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to generate report');
+        }
+
+        const result = await response.json();
+        console.log('Report result:', result.cached ? 'Using cached report' : 'Generated new report');
+
+        if (result.storage_path) {
+          storagePath = result.storage_path;
+          setReportStoragePath(storagePath);
+          setReportCached(true);
+        } else {
+          throw new Error('No storage path returned from report generation');
+        }
+      } else {
+        console.log('Using cached report:', storagePath);
       }
 
-      const result = await response.json();
-
-      if (result.storage_path) {
+      // Download the report from storage
+      if (storagePath) {
         const { data: fileData, error: downloadError } = await supabase.storage
           .from('health-reports')
-          .download(result.storage_path);
+          .download(storagePath);
 
         if (downloadError) throw new Error('Failed to download report: ' + downloadError.message);
 
@@ -308,21 +337,11 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
 
-          // Log download
-          await supabase
-            .from('report_generation_history')
-            .insert({
-              report_id: result.report.id,
-              insight_id: insights ? (await supabase.from('health_insights').select('id').eq('session_id', sessionId).maybeSingle())?.data?.id : null,
-              tone,
-              language_level: languageLevel,
-              download_count: 1,
-              last_downloaded_at: new Date().toISOString()
-            });
+          console.log('Report downloaded successfully');
         }
       }
     } catch (err: any) {
-      console.error('Error generating report:', err);
+      console.error('Error with report:', err);
       setError(err.message);
     } finally {
       setGeneratingReport(false);
@@ -803,18 +822,20 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
               className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 generatingReport
                   ? 'bg-gray-400 cursor-not-allowed'
+                  : reportCached
+                  ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
               }`}
             >
               {generatingReport ? (
                 <>
                   <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                  <span>Generating...</span>
+                  <span>{reportCached ? 'Downloading...' : 'Generating...'}</span>
                 </>
               ) : (
                 <>
                   <Download className="w-5 h-5" />
-                  <span>Download Report</span>
+                  <span>{reportCached ? 'Download Report' : 'Generate & Download Report'}</span>
                 </>
               )}
             </button>
