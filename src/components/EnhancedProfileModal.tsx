@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Loader2, AlertCircle, CheckCircle, Lock } from 'lucide-react';
+import { X, User, Calendar, Loader2, AlertCircle, CheckCircle, Lock, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { updateProfile, changePassword, ChangePasswordInput } from '../lib/profileApi';
+import { supabase } from '../lib/supabase';
 
 interface EnhancedProfileModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOp
     date_of_birth: '',
     gender: '',
     address: '',
+    user_type: 'self' as 'self' | 'caretaker',
   });
 
   const [passwordData, setPasswordData] = useState<ChangePasswordInput>({
@@ -41,6 +43,7 @@ export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOp
         date_of_birth: profile.date_of_birth || '',
         gender: profile.gender || '',
         address: profile.address || '',
+        user_type: (user?.user_metadata?.user_type as 'self' | 'caretaker') || 'self',
       });
       setActiveTab(defaultTab);
       setError('');
@@ -57,8 +60,19 @@ export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOp
     setLoading(true);
 
     try {
-      const { error: err } = await updateProfile(profileData);
+      const { error: err } = await updateProfile({
+        full_name: profileData.full_name,
+        phone: profileData.phone || null,
+        date_of_birth: profileData.date_of_birth || null,
+        gender: profileData.gender || null,
+        address: profileData.address || null,
+      });
       if (err) throw err;
+
+      const { error: metaErr } = await supabase.auth.updateUser({
+        data: { user_type: profileData.user_type }
+      });
+      if (metaErr) throw metaErr;
 
       setSuccess('Profile updated successfully!');
       await refreshProfile();
@@ -112,7 +126,7 @@ export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOp
       onClick={onClose}
     >
       <div
-        className={`relative w-full max-w-2xl rounded-2xl shadow-2xl ${
+        className={`relative w-full max-w-md rounded-2xl shadow-2xl ${
           darkMode ? 'bg-gray-800' : 'bg-white'
         } max-h-[90vh] overflow-y-auto`}
         onClick={(e) => e.stopPropagation()}
@@ -287,6 +301,51 @@ export const EnhancedProfileModal: React.FC<EnhancedProfileModalProps> = ({ isOp
                   } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                   placeholder="Street Address, City, State, ZIP"
                 />
+              </div>
+
+              <div className={`p-4 rounded-lg border ${
+                darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <label className={`block text-sm font-medium mb-3 ${
+                  darkMode ? 'text-gray-200' : 'text-gray-700'
+                }`}>
+                  <Users className="w-4 h-4 inline mr-2" />
+                  I am
+                </label>
+                <div className="flex flex-col space-y-3">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="self"
+                      checked={profileData.user_type === 'self'}
+                      onChange={(e) => setProfileData({
+                        ...profileData,
+                        user_type: e.target.value as 'self' | 'caretaker'
+                      })}
+                      className="w-4 h-4 text-green-500 focus:ring-green-500 focus:ring-2"
+                    />
+                    <span className={`ml-3 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Managing my own health
+                    </span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="caretaker"
+                      checked={profileData.user_type === 'caretaker'}
+                      onChange={(e) => setProfileData({
+                        ...profileData,
+                        user_type: e.target.value as 'self' | 'caretaker'
+                      })}
+                      className="w-4 h-4 text-green-500 focus:ring-green-500 focus:ring-2"
+                    />
+                    <span className={`ml-3 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      A caretaker for others
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <button
