@@ -125,7 +125,7 @@ export const Hero: React.FC<HeroProps> = ({ darkMode, onGetStarted, onEarlyAcces
                 <div className={`p-6 rounded-2xl ${darkMode ? 'bg-gray-700/50' : 'bg-emerald-50'}`}>
                   <div className="flex items-start space-x-4">
                     <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
-                      ��
+                      📊
                     </div>
                     <div className="flex-1">
                       <div className={`font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
