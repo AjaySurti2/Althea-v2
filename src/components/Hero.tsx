@@ -31,9 +31,7 @@ export const Hero: React.FC<HeroProps> = ({ darkMode, onGetStarted, onEarlyAcces
             </h1>
 
             <p className={`text-xl leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Empower yourself with clear, personalized insights from your medical reports. Althea helps you
-              understand your health, track trends, and ask the right questions—so you can take charge of your
-              care with confidence.
+            Medical reports shouldn’t feel like another language, everyone deserves to understand their own health
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
