@@ -143,14 +143,7 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
               </>
             ) : (
               <>
-                <button
-                  onClick={() => onAuthClick('signin')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    darkMode ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Sign In
-                </button>
+                {/* Sign In functionality accessible via Get Started button - users can toggle to Sign In within the auth modal */}
                 <button
                   onClick={() => onAuthClick('signup')}
                   className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
@@ -225,12 +218,7 @@ export const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode, onAuth
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={() => onAuthClick('signin')}
-                    className="px-4 py-2 text-left"
-                  >
-                    Sign In
-                  </button>
+                  {/* Sign In functionality accessible via Get Started button - users can toggle to Sign In within the auth modal */}
                   <button
                     onClick={() => onAuthClick('signup')}
                     className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
