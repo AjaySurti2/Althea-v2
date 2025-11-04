@@ -273,7 +273,7 @@ export async function analyzeFamilyPatterns(): Promise<{ data: FamilyPatternAnal
 
     conditionMap.forEach((members, condition) => {
       if (members.length >= 2) {
-        const riskLevel = members.length >= 3 ? 'high' : members.length === 2 ? 'moderate' : 'low';
+        const risk_level = members.length >= 3 ? 'high' : members.length === 2 ? 'moderate' : 'low';
 
         patterns.push({
           pattern_type: condition,

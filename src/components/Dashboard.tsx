@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, TrendingUp, Users, Calendar, Settings } from 'lucide-react';
+import { FileText, TrendingUp, Users, Calendar, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Session, HealthMetric, FamilyPattern, Reminder } from '../lib/supabase';
 import { TotalReports } from './TotalReports';

@@ -70,7 +70,6 @@ interface ParsedDocument {
 export const DataPreview: React.FC<DataPreviewProps> = ({
   sessionId,
   darkMode,
-  customization,
   onBack,
   onApprove
 }) => {

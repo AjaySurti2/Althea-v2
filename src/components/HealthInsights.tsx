@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Brain, Heart, AlertTriangle, CheckCircle, ArrowRight, ArrowLeft,
+  Brain, AlertTriangle, CheckCircle, ArrowRight, ArrowLeft,
   TrendingUp, Users, Calendar, Download, MessageCircle, Activity,
-  Lightbulb, FileText, RefreshCw
+  Lightbulb, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 

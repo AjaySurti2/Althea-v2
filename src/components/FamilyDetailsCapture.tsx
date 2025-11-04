@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, X, AlertCircle, CheckCircle, Calendar, Heart, Loader2, Info, ArrowRight } from 'lucide-react';
+import { Users, Plus, X, AlertCircle, CheckCircle, Loader2, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getFamilyMembers, createFamilyMember, CreateFamilyMemberInput } from '../lib/familyApi';
 import { FamilyMember } from '../lib/supabase';
@@ -28,7 +28,7 @@ export const FamilyDetailsCapture: React.FC<FamilyDetailsCaptureProps> = ({
   onContinue,
   onSkip
 }) => {
-  const { profile } = useAuth();
+  const { } = useAuth();
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
