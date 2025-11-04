@@ -57,7 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen pt-16 flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Loading your dashboard...</p>
