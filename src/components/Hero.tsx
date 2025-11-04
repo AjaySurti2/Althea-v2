@@ -34,15 +34,7 @@ export const Hero: React.FC<HeroProps> = ({ darkMode, onGetStarted, onEarlyAcces
             Medical reports shouldn’t feel like another language, everyone deserves to understand their own health
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={onGetStarted}
-                className="group px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-green-500/30 transition-all duration-300 flex items-center justify-center space-x-2"
-              >
-                <span>Get Started Free</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-
+            <div>
               <button
                 onClick={onEarlyAccess}
                 className={`px-8 py-4 rounded-xl font-semibold border-2 transition-all duration-300 ${
