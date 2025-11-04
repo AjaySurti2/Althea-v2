@@ -1,3 +1,153 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===============================================
+   AI Badge Sparkling & Glowing Effects
+   =============================================== */
+
+/* Keyframe animations for sparkling effect */
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    opacity: 0.7;
+    transform: scale(1.1) rotate(5deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2) rotate(-5deg);
+  }
+  75% {
+    opacity: 0.8;
+    transform: scale(1.1) rotate(5deg);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 4px rgba(34, 197, 94, 0.4),
+      0 0 8px rgba(34, 197, 94, 0.2);
+  }
+  50% {
+    text-shadow:
+      0 0 8px rgba(34, 197, 94, 0.6),
+      0 0 16px rgba(34, 197, 94, 0.4),
+      0 0 24px rgba(34, 197, 94, 0.2);
+  }
+}
+
+@keyframes border-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 8px rgba(34, 197, 94, 0.3),
+      0 0 16px rgba(34, 197, 94, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(34, 197, 94, 0.5),
+      0 0 32px rgba(34, 197, 94, 0.3),
+      0 0 48px rgba(34, 197, 94, 0.1);
+  }
+}
+
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* Base badge styling with glow effect */
+.ai-badge-glow {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover state: Apply glowing effects */
+.ai-badge-glow[data-hovered="true"] {
+  animation: border-glow 2s ease-in-out infinite;
+  transform: translateY(-2px);
+}
+
+/* Active state: Stronger glow effect */
+.ai-badge-glow[data-active="true"] {
+  transform: translateY(0px) scale(0.98);
+  box-shadow:
+    0 0 20px rgba(34, 197, 94, 0.6),
+    0 0 40px rgba(34, 197, 94, 0.4);
+}
+
+/* Sparkle icon animation on hover */
+.sparkle-icon {
+  animation: sparkle 1.5s ease-in-out infinite;
+}
+
+/* Text glow effect on hover */
+.glow-text {
+  animation: glow-pulse 2s ease-in-out infinite;
+  font-weight: 600;
+}
+
+/* Dark mode adjustments */
+.dark .ai-badge-glow[data-hovered="true"] {
+  animation: border-glow 2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse-dark {
+  0%, 100% {
+    text-shadow:
+      0 0 6px rgba(134, 239, 172, 0.5),
+      0 0 12px rgba(134, 239, 172, 0.3);
+  }
+  50% {
+    text-shadow:
+      0 0 12px rgba(134, 239, 172, 0.7),
+      0 0 24px rgba(134, 239, 172, 0.5),
+      0 0 36px rgba(134, 239, 172, 0.3);
+  }
+}
+
+.dark .glow-text {
+  animation: glow-pulse-dark 2s ease-in-out infinite;
+}
+
+/* ===============================================
+   Early Access Button Transitions
+   =============================================== */
+
+/* Smooth fade-in/fade-out for early access button */
+.early-access-container {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Accessibility: Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .ai-badge-glow,
+  .sparkle-icon,
+  .glow-text,
+  .early-access-container {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .ai-badge-glow[data-hovered="true"] {
+    transform: none;
+  }
+}
