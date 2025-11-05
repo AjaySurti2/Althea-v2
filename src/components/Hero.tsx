@@ -43,7 +43,7 @@ export const Hero: React.FC<HeroProps> = ({ darkMode, onGetStarted, onEarlyAcces
             <h1 className={`text-5xl md:text-6xl lg:text-7xl font-bold leading-tight ${
               darkMode ? 'text-white' : 'text-gray-900'
             }`}>
-              AI That Translates{' '}
+              Althea That Translates{' '}
               <span className="bg-gradient-to-r from-green-500 to-emerald-600 text-transparent bg-clip-text">
                 Medicine
               </span>{' '}
