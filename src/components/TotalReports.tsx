@@ -109,11 +109,89 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       })) || [];
 
       setSessions(processedSessions);
+
+      // Background check: Trigger report pre-generation for sessions with insights but no reports
+      checkAndPreGenerateReports(processedSessions);
     } catch (error: any) {
       console.error('Error loading sessions:', error);
       alert(`Failed to load sessions: ${error.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Check for sessions with insights but no generated reports and trigger background generation
+  const checkAndPreGenerateReports = async (sessions: any[]) => {
+    if (!user) return;
+
+    for (const session of sessions) {
+      // Skip if session already has generated reports
+      if (session.generatedReports && session.generatedReports.length > 0) {
+        continue;
+      }
+
+      // Skip if session has no parsed reports (no insights to generate from)
+      if (!session.parsedReports || session.parsedReports.length === 0) {
+        continue;
+      }
+
+      // Check if health insights exist for this session
+      try {
+        const { data: insights, error } = await supabase
+          .from('health_insights')
+          .select('id, report_storage_path')
+          .eq('session_id', session.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.warn(`Error checking insights for session ${session.id}:`, error);
+          continue;
+        }
+
+        // If insights exist but no report is cached, trigger background generation
+        if (insights && !insights.report_storage_path) {
+          console.log(`Background: Triggering report generation for session ${session.id}`);
+          // Don't await - let it run in background
+          generateReportInBackground(session.id);
+        }
+      } catch (err) {
+        console.warn(`Error in background check for session ${session.id}:`, err);
+      }
+    }
+  };
+
+  // Background report generation (non-blocking)
+  const generateReportInBackground = async (sessionId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          sessionId,
+          reportType: 'comprehensive',
+          includeQuestions: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Background report generated for session ${sessionId}:`, result.cached ? 'cached' : 'new');
+        // Silently reload sessions to update UI
+        await loadSessions();
+      }
+    } catch (error) {
+      // Silent failure - this is background operation
+      console.warn(`Background report generation failed for session ${sessionId}:`, error);
     }
   };
 
@@ -225,7 +303,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
     try {
       setGeneratingReport(sessionId);
 
-      // Verify session with detailed logging
+      // Verify authentication
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
         console.error('Session error:', sessionError);
@@ -236,12 +314,28 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         throw new Error('Not authenticated. Please sign in again.');
       }
 
-      console.log('Generating report for session:', sessionId);
-      console.log('User authenticated:', session.user.id);
+      // CRITICAL: Check if health insights exist before generating report
+      console.log('Checking for existing health insights for session:', sessionId);
+      const { data: existingInsights, error: insightsError } = await supabase
+        .from('health_insights')
+        .select('id, insights_data, report_storage_path')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (insightsError) {
+        console.error('Error checking insights:', insightsError);
+        throw new Error('Failed to check health insights: ' + insightsError.message);
+      }
+
+      if (!existingInsights || !existingInsights.insights_data) {
+        throw new Error('No health insights found. Please generate insights first by completing the upload workflow.');
+      }
+
+      console.log('Health insights verified. Generating report for session:', sessionId);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      console.log('Calling edge function:', apiUrl);
-
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -255,8 +349,6 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
           includeQuestions: true
         })
       });
-
-      console.log('Edge function response status:', response.status);
 
       if (!response.ok) {
         let errorMessage = 'Failed to generate report';
@@ -273,11 +365,11 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       }
 
       const result = await response.json();
-      console.log('Report generated successfully:', result);
+      console.log('Report generation result:', result.cached ? 'Using cached report' : 'Generated new report');
 
       // Reload sessions to show the new report
       await loadSessions();
-      alert('Health report generated successfully! You can now download it from the reports list.');
+      alert('Health Insights Report generated successfully! You can now download it from the reports list.');
     } catch (error: any) {
       console.error('Error generating report:', error);
       alert(`Failed to generate report: ${error.message}\n\nPlease try again or contact support if the problem persists.`);
@@ -884,7 +976,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                         <h4 className={`text-sm font-semibold ${
                           darkMode ? 'text-gray-300' : 'text-gray-700'
                         }`}>
-                          Generated Health Reports ({session.generatedReports.length})
+                          Health Insights Reports ({session.generatedReports.length})
                         </h4>
                       </div>
                       <div className="space-y-3">
@@ -1002,7 +1094,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                         ) : (
                           <>
                             <FileText className="w-5 h-5" />
-                            <span>Generate Comprehensive Health Report</span>
+                            <span>Generate Health Insights Report</span>
                           </>
                         )}
                       </button>

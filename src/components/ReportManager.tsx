@@ -571,7 +571,7 @@ export const ReportManager: React.FC<ReportManagerProps> = ({ sessionId, darkMod
             No Reports Generated Yet
           </p>
           <p className={`mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Generate your first comprehensive health report
+            Generate your first Health Insights Report
           </p>
           <button
             onClick={generateReport}

@@ -469,7 +469,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         </div>
         <div className="text-right">
           <h2 className={`text-lg font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            Comprehensive Health Report
+            Health Insights Report
           </h2>
           <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
