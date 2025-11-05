@@ -28,6 +28,53 @@ interface ReportSection {
   follow_up_timeline: string;
 }
 
+// Transform insights data directly to report format (no regeneration)
+function transformInsightsToReportFormat(insights: any): ReportSection {
+  console.log("Transforming existing insights to report format");
+
+  // Map insights structure to report structure
+  const reportContent: ReportSection = {
+    executive_summary: insights.summary || "Comprehensive health analysis based on your medical reports.",
+    key_findings: {
+      genetic: [],
+      lifestyle: [],
+      risk_factors: []
+    },
+    abnormal_values: insights.abnormal_values || [],
+    health_recommendations: insights.health_recommendations || [],
+    family_screening: insights.family_screening_suggestions || [],
+    follow_up_timeline: insights.follow_up_timeline || "Please consult with your healthcare provider to discuss these findings and establish an appropriate follow-up schedule."
+  };
+
+  // Transform key_findings array to categorized object
+  if (insights.key_findings && Array.isArray(insights.key_findings)) {
+    insights.key_findings.forEach((finding: any) => {
+      const category = finding.category?.toLowerCase() || '';
+
+      const mappedFinding = {
+        finding: finding.finding || finding.description || '',
+        significance: finding.significance || finding.explanation || '',
+        action: finding.action_needed || finding.recommendation || ''
+      };
+
+      if (category.includes('genetic') || category.includes('family')) {
+        reportContent.key_findings.genetic.push(mappedFinding);
+      } else if (category.includes('lifestyle') || category.includes('diet') || category.includes('exercise')) {
+        reportContent.key_findings.lifestyle.push(mappedFinding);
+      } else if (category.includes('risk')) {
+        reportContent.key_findings.risk_factors.push(mappedFinding);
+      } else {
+        // Default to lifestyle if category unclear
+        reportContent.key_findings.lifestyle.push(mappedFinding);
+      }
+    });
+  }
+
+  return reportContent;
+}
+
+// DEPRECATED: This function is kept for reference but should NOT be called
+// to avoid regenerating content that differs from what user sees on screen
 async function generateReportContent(
   labReports: any[],
   testResults: any[],
@@ -741,7 +788,16 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Generating new report for session: ${sessionId}`);
 
-    // Get lab reports and test results
+    // CRITICAL: Use existing insights data to ensure consistency
+    // The downloaded report MUST match what user sees on screen
+    if (!existingInsights || !existingInsights.insights_data) {
+      return new Response(
+        JSON.stringify({ error: "No health insights found. Please generate insights first." }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get lab reports and patient info for metadata only
     const { data: labReports, error: reportsError } = await supabase
       .from("lab_reports")
       .select("*")
@@ -768,15 +824,11 @@ Deno.serve(async (req: Request) => {
       .eq("id", patientId)
       .maybeSingle();
 
-    console.log(`Generating report content for ${testResults?.length || 0} tests`);
+    console.log(`Using existing insights data to create consistent report (no regeneration)`);
 
-    // Generate report content
-    const reportContent = await generateReportContent(
-      labReports,
-      testResults || [],
-      patient,
-      existingInsights?.insights_data
-    );
+    // Use the SAME insights data that's displayed on screen
+    // This ensures the downloaded report matches exactly what the user reviewed
+    const reportContent = transformInsightsToReportFormat(existingInsights.insights_data);
 
     // Generate report ID and metadata
     const reportId = crypto.randomUUID();
@@ -828,21 +880,35 @@ Deno.serve(async (req: Request) => {
 
     if (saveError) throw saveError;
 
-    // Generate and save questions
+    // Use questions from existing insights (no regeneration for consistency)
     let questions = [];
-    if (includeQuestions) {
-      questions = await generateQuestions(reportContent, testResults || []);
+    if (includeQuestions && existingInsights.insights_data.questions_for_doctor) {
+      console.log("Using existing questions from insights (no regeneration)");
 
-      for (let i = 0; i < questions.length; i++) {
-        await supabase.from("report_questions").insert({
-          report_id: reportId,
-          user_id: userId,
-          question_text: questions[i].question,
-          priority: questions[i].priority,
-          category: questions[i].category,
-          clinical_context: questions[i].clinical_context,
-          sort_order: i
+      // Transform existing questions to database format
+      const existingQuestions = existingInsights.insights_data.questions_for_doctor;
+
+      if (Array.isArray(existingQuestions)) {
+        existingQuestions.forEach((questionText: string, index: number) => {
+          questions.push({
+            question: questionText,
+            priority: index < 2 ? 'high' : index < 4 ? 'medium' : 'low',
+            category: 'general',
+            clinical_context: 'Generated from health insights analysis'
+          });
         });
+
+        for (let i = 0; i < questions.length; i++) {
+          await supabase.from("report_questions").insert({
+            report_id: reportId,
+            user_id: userId,
+            question_text: questions[i].question,
+            priority: questions[i].priority,
+            category: questions[i].category,
+            clinical_context: questions[i].clinical_context,
+            sort_order: i
+          });
+        }
       }
     }
 
