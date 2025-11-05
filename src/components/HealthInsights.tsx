@@ -53,8 +53,9 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tone, setTone] = useState('conversational');
-  const [languageLevel, setLanguageLevel] = useState('simple_terms');
+  // Simplified mode: Use default preferences automatically
+  const [tone] = useState('friendly');
+  const [languageLevel] = useState('simple');
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportStoragePath, setReportStoragePath] = useState<string | null>(null);
   const [reportCached, setReportCached] = useState(false);
@@ -88,8 +89,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
       if (existingInsights) {
         setInsights(existingInsights.insights_data);
-        setTone(existingInsights.tone);
-        setLanguageLevel(existingInsights.language_level);
+        // Simplified mode: Ignore stored preferences, always use defaults
 
         // Check if report is already cached
         if (existingInsights.report_storage_path) {
@@ -393,22 +393,14 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           />
           <div>
             <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Your Health Insights
+              Your Health Insights & Report
             </h2>
             <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-              AI-powered analysis by Althea
+              AI-powered analysis by Althea in friendly, plain language
             </p>
           </div>
         </div>
-        <button
-          onClick={handleRegenerate}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Regenerate</span>
-        </button>
+        {/* Simplified mode: Hide regenerate button - reports auto-generated with friendly defaults */}
       </div>
 
       {insights.urgency_flag && insights.urgency_flag !== 'none' && (
@@ -614,6 +606,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         </p>
       </div>
 
+      {/* Simplified Action Bar - Unified Download Button */}
       <div className="flex justify-between pt-4">
         <button
           onClick={onBack}
@@ -626,36 +619,26 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         </button>
 
         <div className="flex items-center space-x-3">
-          <button
-            onClick={handleRegenerate}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-            }`}
-          >
-            <RefreshCw className="w-5 h-5" />
-            <span>Regenerate</span>
-          </button>
-
+          {/* Unified Download Button - Uses cached report generated in background */}
           <button
             onClick={handleGenerateReport}
             disabled={generatingReport}
             className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
               generatingReport
                 ? 'bg-gray-400 cursor-not-allowed'
-                : reportCached
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
+                : 'bg-green-600 text-white hover:bg-green-700'
             }`}
+            title={reportCached ? "Download your comprehensive health report" : "Generating your report..."}
           >
             {generatingReport ? (
               <>
                 <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                <span>{reportCached ? 'Downloading...' : 'Generating...'}</span>
+                <span>Preparing...</span>
               </>
             ) : (
               <>
                 <Download className="w-5 h-5" />
-                <span>{reportCached ? 'Download Report' : 'Generate & Download Report'}</span>
+                <span>Download Report</span>
               </>
             )}
           </button>

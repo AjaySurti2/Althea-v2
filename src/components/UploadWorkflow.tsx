@@ -731,9 +731,33 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setCurrentStep(2);
   };
 
-  const handleParsedDataContinue = () => {
+  const handleParsedDataContinue = async () => {
     setShowParsedDataReview(false);
-    setCurrentStep(2); // Show Step 2: Customize
+
+    // Skip customization step - apply defaults and go directly to Health Insights
+    if (!sessionId) {
+      setShowHealthInsights(true);
+      return;
+    }
+
+    try {
+      // Update session with default preferences
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          tone: 'friendly',
+          language_level: 'simple',
+        })
+        .eq('id', sessionId);
+
+      if (error) {
+        console.error('Failed to update session with defaults:', error);
+      }
+    } catch (error) {
+      console.error('Error updating customization:', error);
+    }
+
+    setShowHealthInsights(true); // Show Step 3: Health Insights directly
   };
 
   const handleParsedDataBack = () => {
@@ -748,7 +772,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleHealthInsightsBack = () => {
     setShowHealthInsights(false);
-    setCurrentStep(2); // Go back to Step 2: Customize
+    setShowParsedDataReview(true); // Go back to Step 2: Review Parsed Data
   };
 
   const handleReviewBack = () => {
@@ -940,14 +964,13 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     );
   }
 
-  const progressPercentage = (currentStep / 4) * 100; // 4 is the max step number (0-4 = 5 steps)
+  const progressPercentage = (currentStep / 3) * 100; // 3 is the max step number (0-3 = 4 steps)
 
   const steps = [
     { number: 0, icon: Users, label: 'Family Details' },
     { number: 1, icon: Upload, label: 'Upload' },
-    { number: 2, icon: Sliders, label: 'Customize' },
-    { number: 3, icon: Sparkles, label: 'Health Insights & Report' },
-    { number: 4, icon: CheckCircle, label: 'Complete' },
+    { number: 2, icon: Sparkles, label: 'Health Insights & Report' },
+    { number: 3, icon: CheckCircle, label: 'Complete' },
   ];
 
   return (
@@ -972,7 +995,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     Althea : Your Personal Health Interpreter
                   </h1>
                   <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Step {currentStep + 1} of 5
+                    Step {currentStep + 1} of 4
                   </p>
                 </div>
               </div>
@@ -1225,107 +1248,12 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               </div>
             )}
 
-            {currentStep === 2 && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Customize Your Experience
-                  </h2>
-                  <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                    Choose how you want your health information explained to you.
-                  </p>
-                </div>
+            {/* Step 2: Customize - HIDDEN IN SIMPLIFIED MODE
+                Note: Keep this code for future re-enablement via customization_visible flag
+                To re-enable: Set customization_visible = true in user preferences
+            */}
 
-                <div className="space-y-6">
-                  <div>
-                    <label className={`block text-sm font-medium mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Tone Preference
-                    </label>
-                    <div className="grid grid-cols-3 gap-4">
-                      {[
-                        { value: 'friendly', label: 'Friendly', description: 'Warm and conversational' },
-                        { value: 'professional', label: 'Professional', description: 'Clinical and precise' },
-                        { value: 'empathetic', label: 'Empathetic', description: 'Supportive and caring' },
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => setTone(option.value as any)}
-                          className={`p-4 rounded-xl border-2 transition-all ${
-                            tone === option.value
-                              ? 'border-green-500 bg-green-500/10'
-                              : darkMode
-                              ? 'border-gray-700 hover:border-gray-600'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className={`font-semibold mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {option.label}
-                          </div>
-                          <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {option.description}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Language Level
-                    </label>
-                    <div className="grid grid-cols-3 gap-4">
-                      {[
-                        { value: 'simple', label: 'Simple', description: 'Easy to understand' },
-                        { value: 'moderate', label: 'Moderate', description: 'Some medical terms' },
-                        { value: 'technical', label: 'Technical', description: 'Medical jargon' },
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => setLanguageLevel(option.value as any)}
-                          className={`p-4 rounded-xl border-2 transition-all ${
-                            languageLevel === option.value
-                              ? 'border-green-500 bg-green-500/10'
-                              : darkMode
-                              ? 'border-gray-700 hover:border-gray-600'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className={`font-semibold mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {option.label}
-                          </div>
-                          <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {option.description}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between">
-                  <button
-                    onClick={() => setShowParsedDataReview(true)}
-                    className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-                      darkMode
-                        ? 'bg-gray-700 text-white hover:bg-gray-600'
-                        : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                    }`}
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                    <span>Back</span>
-                  </button>
-                  <button
-                    onClick={handleCustomizeContinue}
-                    className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-                  >
-                    <span>Next: Health Insights</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 4 && (
+            {currentStep === 3 && (
               <div className="space-y-6">
                 <div>
                   <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -1398,7 +1326,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               </div>
             )}
 
-            {currentStep === 5 && (
+            {currentStep === 4 && (
               <div className="space-y-6">
                 <div className="text-center py-8">
                   <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">

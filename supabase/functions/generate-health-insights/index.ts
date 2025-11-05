@@ -250,6 +250,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Simplified mode: Default to friendly/simple if not specified
     const { sessionId, tone = "conversational", languageLevel = "simple_terms" }: InsightsRequest = await req.json();
 
     if (!sessionId) {
@@ -263,7 +264,7 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`Generating insights for session: ${sessionId}`);
+    console.log(`Generating insights for session: ${sessionId} with tone: ${tone}, language: ${languageLevel}`);
 
     const { data: labReports, error: reportsError } = await supabase
       .from("lab_reports")
