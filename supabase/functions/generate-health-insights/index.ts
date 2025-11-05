@@ -305,23 +305,36 @@ Deno.serve(async (req: Request) => {
       languageLevel
     );
 
-    await supabase.from("health_insights").insert({
-      session_id: sessionId,
-      user_id: labReports[0].user_id,
-      insights_data: insights,
-      tone: tone,
-      language_level: languageLevel,
-      metadata: {
-        report_count: labReports.length,
-        test_count: testResults?.length || 0,
-        generated_at: new Date().toISOString()
-      }
-    });
+    // Save insights to database with error handling
+    const { data: savedInsight, error: saveError } = await supabase
+      .from("health_insights")
+      .insert({
+        session_id: sessionId,
+        user_id: labReports[0].user_id,
+        insights_data: insights,
+        tone: tone,
+        language_level: languageLevel,
+        metadata: {
+          report_count: labReports.length,
+          test_count: testResults?.length || 0,
+          generated_at: new Date().toISOString()
+        }
+      })
+      .select()
+      .single();
+
+    if (saveError) {
+      console.error("Failed to save insights to database:", saveError);
+      throw new Error(`Failed to save insights: ${saveError.message}`);
+    }
+
+    console.log("Insights saved successfully to database with ID:", savedInsight.id);
 
     return new Response(
       JSON.stringify({
         success: true,
         insights,
+        insight_id: savedInsight.id,
         metadata: {
           reports_analyzed: labReports.length,
           tests_analyzed: testResults?.length || 0,
