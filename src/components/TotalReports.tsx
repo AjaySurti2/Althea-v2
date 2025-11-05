@@ -225,15 +225,29 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
     try {
       setGeneratingReport(sessionId);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      // Verify session with detailed logging
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Authentication error: ' + sessionError.message);
+      }
+      if (!session) {
+        console.error('No active session found');
+        throw new Error('Not authenticated. Please sign in again.');
+      }
+
+      console.log('Generating report for session:', sessionId);
+      console.log('User authenticated:', session.user.id);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
+      console.log('Calling edge function:', apiUrl);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           sessionId,
@@ -242,9 +256,20 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         })
       });
 
+      console.log('Edge function response status:', response.status);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate report');
+        let errorMessage = 'Failed to generate report';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          console.error('Edge function error response:', errorData);
+        } catch (parseError) {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+          console.error('Edge function error (text):', errorText);
+        }
+        throw new Error(`${errorMessage} (Status: ${response.status})`);
       }
 
       const result = await response.json();
@@ -252,10 +277,10 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
       // Reload sessions to show the new report
       await loadSessions();
-      alert('Health report generated successfully!');
+      alert('Health report generated successfully! You can now download it from the reports list.');
     } catch (error: any) {
       console.error('Error generating report:', error);
-      alert(`Failed to generate report: ${error.message}`);
+      alert(`Failed to generate report: ${error.message}\n\nPlease try again or contact support if the problem persists.`);
     } finally {
       setGeneratingReport(null);
     }

@@ -67,8 +67,11 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   // Auto-generate report in background after insights are loaded (Step 3)
   useEffect(() => {
     if (insights && !reportCached && !generatingReport && !loading) {
-      // Automatically trigger report generation in the background
-      generateReportInBackground();
+      // Delay to prevent race conditions with component state
+      const timer = setTimeout(() => {
+        generateReportInBackground();
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [insights, reportCached, loading]);
 
@@ -166,11 +169,20 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
   // Generate report in background (called automatically in Step 3)
   const generateReportInBackground = async () => {
+    // Prevent multiple simultaneous calls
+    if (generatingReport) {
+      console.log('Report generation already in progress, skipping');
+      return;
+    }
+
     try {
       setGeneratingReport(true);
 
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        console.warn('No active session for background report generation');
+        return;
+      }
 
       // CRITICAL: Verify insights are saved in database before generating report
       console.log('Verifying insights are saved before generating report...');
@@ -196,6 +208,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           sessionId,
@@ -205,8 +218,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Background report generation failed:', errorData);
+        const errorText = await response.text();
+        console.error('Background report generation failed:', response.status, errorText);
         return; // Don't throw error - just log it
       }
 
