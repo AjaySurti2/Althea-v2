@@ -481,16 +481,93 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         </div>
       )}
 
-      {/* Section 1: Executive Summary */}
+      {/* Section 1: Enhanced Executive Summary */}
       <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
           1. Executive Summary
         </h2>
-        <div className={`p-5 rounded-lg border-l-4 border-green-600 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
-          <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-            {insights.summary}
-          </p>
-        </div>
+
+        {insights.enhanced_summary && Object.keys(insights.enhanced_summary).length > 0 ? (
+          <div className="space-y-4">
+            {/* Greeting */}
+            {insights.enhanced_summary.greeting && (
+              <div className={`p-4 rounded-lg ${darkMode ? 'bg-green-900/20' : 'bg-green-50'}`}>
+                <p className={`text-lg font-medium ${darkMode ? 'text-green-300' : 'text-green-800'}`}>
+                  {insights.enhanced_summary.greeting}
+                </p>
+              </div>
+            )}
+
+            {/* Overall Health Status */}
+            {insights.enhanced_summary.overall_assessment && (
+              <div className={`p-4 rounded-lg border-l-4 border-blue-500 ${darkMode ? 'bg-gray-900/50' : 'bg-blue-50'}`}>
+                <h3 className={`font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
+                  Overall Health Status
+                </h3>
+                <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                  {insights.enhanced_summary.overall_assessment}
+                </p>
+              </div>
+            )}
+
+            {/* Body Response Pattern */}
+            {insights.enhanced_summary.body_response_pattern && (
+              <div className={`p-4 rounded-lg border-l-4 border-purple-500 ${darkMode ? 'bg-gray-900/50' : 'bg-purple-50'}`}>
+                <h3 className={`font-bold mb-2 ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>
+                  Body Response Pattern
+                </h3>
+                <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                  {insights.enhanced_summary.body_response_pattern}
+                </p>
+              </div>
+            )}
+
+            {/* Positive Signs */}
+            {insights.enhanced_summary.positive_signs && insights.enhanced_summary.positive_signs.length > 0 && (
+              <div className={`p-4 rounded-lg border-l-4 border-green-500 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
+                <h3 className={`font-bold mb-2 ${darkMode ? 'text-green-400' : 'text-green-700'}`}>
+                  Positive Signs
+                </h3>
+                <ul className="space-y-2">
+                  {insights.enhanced_summary.positive_signs.map((sign: string, idx: number) => (
+                    <li key={idx} className={`flex items-start space-x-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                      <span>{sign}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Health Story Context */}
+            {insights.enhanced_summary.health_story_context && (
+              <div className={`p-4 rounded-lg border-l-4 border-teal-500 ${darkMode ? 'bg-gray-900/50' : 'bg-teal-50'}`}>
+                <h3 className={`font-bold mb-2 ${darkMode ? 'text-teal-400' : 'text-teal-700'}`}>
+                  What This Means for You
+                </h3>
+                <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                  {insights.enhanced_summary.health_story_context}
+                </p>
+              </div>
+            )}
+
+            {/* Key Message */}
+            {insights.enhanced_summary.key_message && (
+              <div className={`p-4 rounded-lg text-center ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                <p className={`text-base italic font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {insights.enhanced_summary.key_message}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Fallback to basic summary */
+          <div className={`p-5 rounded-lg border-l-4 border-green-600 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
+            <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+              {insights.summary}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Section 2: Key Findings by Category */}

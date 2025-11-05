@@ -109,6 +109,18 @@ SAFETY PROTOCOLS:
 OUTPUT FORMAT (JSON):
 {
   "summary": "Brief overview with personalized greeting using patient name",
+  "enhanced_summary": {
+    "greeting": "Hello [Patient Name]! Here's a clear summary of what your lab results from [Date] tell us:",
+    "overall_health_status": "excellent|good|requires_attention|concerning",
+    "overall_assessment": "2-3 sentence summary explaining the big picture: what areas need care, what looks good, and overall trajectory",
+    "body_response_pattern": "Clear explanation of what patterns show about how the body is functioning - e.g., 'Low hemoglobin and hematocrit levels indicate your body might be carrying slightly less oxygen, which can explain feelings of fatigue or low energy. Elevated white blood cells may mean your immune system is responding to mild inflammation or infection.'",
+    "positive_signs": [
+      "Specific positive finding 1 - e.g., 'Platelet levels are normal'",
+      "Specific positive finding 2 - e.g., 'No critical markers were found'"
+    ],
+    "health_story_context": "Personalized 1-2 sentence narrative connecting findings to patient's wellbeing - e.g., 'These findings suggest your body could benefit from more iron-rich foods and rest. Nothing appears alarming, but follow-up with your doctor within 1-2 weeks is recommended to confirm these results and guide next steps.'",
+    "key_message": "One clear takeaway message that empowers the patient - e.g., 'Your health story is unique — this summary is here to help you understand it clearly and calmly.'"
+  },
   "key_findings": [
     {
       "category": "Blood Sugar / Heart Health / etc",
@@ -309,6 +321,9 @@ Deno.serve(async (req: Request) => {
         session_id: sessionId,
         user_id: labReports[0].user_id,
         insights_data: insights,
+        enhanced_summary: insights.enhanced_summary || {},
+        overall_health_status: insights.enhanced_summary?.overall_health_status || 'good',
+        executive_summary_generated_at: new Date().toISOString(),
         tone: tone,
         language_level: languageLevel,
         metadata: {

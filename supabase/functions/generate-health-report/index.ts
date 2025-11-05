@@ -42,9 +42,31 @@ function transformInsightsToReportFormat(insights: any): ReportSection {
   console.log("Transforming existing insights to report format");
   console.log("Insights structure:", JSON.stringify(Object.keys(insights), null, 2));
 
+  // Build enhanced executive summary from structured data
+  let executiveSummary = "";
+
+  if (insights.enhanced_summary && Object.keys(insights.enhanced_summary).length > 0) {
+    const es = insights.enhanced_summary;
+    const parts = [];
+
+    if (es.greeting) parts.push(`<p class="greeting">${es.greeting}</p>`);
+    if (es.overall_assessment) parts.push(`<p><strong>Overall Health Status:</strong> ${es.overall_assessment}</p>`);
+    if (es.body_response_pattern) parts.push(`<p><strong>Body Response Pattern:</strong> ${es.body_response_pattern}</p>`);
+    if (es.positive_signs && es.positive_signs.length > 0) {
+      parts.push(`<p><strong>Positive Signs:</strong> ${es.positive_signs.join(", ")}</p>`);
+    }
+    if (es.health_story_context) parts.push(`<p><strong>What This Means for You:</strong> ${es.health_story_context}</p>`);
+    if (es.key_message) parts.push(`<p class="key-message">${es.key_message}</p>`);
+
+    executiveSummary = parts.join("\n");
+  } else {
+    // Fallback to basic summary if enhanced_summary not available
+    executiveSummary = `<p>${insights.summary || insights.executive_summary || insights.overview || "Comprehensive health analysis based on your medical reports."}</p>`;
+  }
+
   // Map insights structure to report structure with flexible field mapping
   const reportContent: ReportSection = {
-    executive_summary: insights.summary || insights.executive_summary || insights.overview || "Comprehensive health analysis based on your medical reports.",
+    executive_summary: executiveSummary,
     key_findings: {
       genetic: [],
       lifestyle: [],
