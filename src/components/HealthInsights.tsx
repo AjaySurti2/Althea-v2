@@ -172,7 +172,23 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      console.log('Auto-generating report in background for session:', sessionId);
+      // CRITICAL: Verify insights are saved in database before generating report
+      console.log('Verifying insights are saved before generating report...');
+      const { data: savedInsights, error: verifyError } = await supabase
+        .from('health_insights')
+        .select('id, insights_data')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (verifyError || !savedInsights || !savedInsights.insights_data) {
+        console.error('Insights not yet saved to database, skipping report generation');
+        setGeneratingReport(false);
+        return;
+      }
+
+      console.log('Insights confirmed in database, auto-generating report in background for session:', sessionId);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
       const response = await fetch(apiUrl, {
@@ -228,6 +244,21 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
       // If not cached yet (shouldn't happen in normal flow), generate it now
       console.log('Report not cached, generating now for session:', sessionId);
+
+      // CRITICAL: Verify insights exist before attempting report generation
+      const { data: savedInsights, error: verifyError } = await supabase
+        .from('health_insights')
+        .select('id, insights_data')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (verifyError || !savedInsights || !savedInsights.insights_data) {
+        throw new Error('Health insights not found in database. Please wait for insights to finish generating.');
+      }
+
+      console.log('Insights verified in database, proceeding with report generation');
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
       const response = await fetch(apiUrl, {
