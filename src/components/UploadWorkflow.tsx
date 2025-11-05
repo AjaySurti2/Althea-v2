@@ -728,7 +728,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleReviewContinue = () => {
     setShowReview(false);
-    setCurrentStep(2);
+    setShowParsedDataReview(true); // Show parsed data review directly (skip customization)
   };
 
   const handleParsedDataContinue = async () => {
@@ -802,7 +802,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       console.error('Error updating customization:', error);
     }
 
-    setShowHealthInsights(true); // Show Step 3: Health Insights after customization
+    setShowHealthInsights(true); // Show Step 3: Health Insights directly (skipped customization)
   };
 
   const handleDataPreviewBack = () => {
