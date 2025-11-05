@@ -166,7 +166,6 @@ OUTPUT FORMAT (JSON):
     category: test.test_category
   }));
 
-  // Build personalized context
   const patientName = patient?.name || 'there';
   const patientAge = patient?.age ? `${patient.age} years old` : 'age not specified';
   const patientGender = patient?.gender || 'gender not specified';
@@ -250,7 +249,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Simplified mode: Default to friendly/simple if not specified
     const { sessionId, tone = "conversational", languageLevel = "simple_terms" }: InsightsRequest = await req.json();
 
     if (!sessionId) {
@@ -305,7 +303,6 @@ Deno.serve(async (req: Request) => {
       languageLevel
     );
 
-    // Save insights to database with error handling
     const { data: savedInsight, error: saveError } = await supabase
       .from("health_insights")
       .insert({
