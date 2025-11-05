@@ -31,35 +31,40 @@ interface ReportSection {
 // Transform insights data directly to report format (no regeneration)
 function transformInsightsToReportFormat(insights: any): ReportSection {
   console.log("Transforming existing insights to report format");
+  console.log("Insights structure:", JSON.stringify(Object.keys(insights), null, 2));
 
-  // Map insights structure to report structure
+  // Map insights structure to report structure with flexible field mapping
   const reportContent: ReportSection = {
-    executive_summary: insights.summary || "Comprehensive health analysis based on your medical reports.",
+    executive_summary: insights.summary || insights.executive_summary || insights.overview || "Comprehensive health analysis based on your medical reports.",
     key_findings: {
       genetic: [],
       lifestyle: [],
       risk_factors: []
     },
-    abnormal_values: insights.abnormal_values || [],
-    health_recommendations: insights.health_recommendations || [],
-    family_screening: insights.family_screening_suggestions || [],
-    follow_up_timeline: insights.follow_up_timeline || "Please consult with your healthcare provider to discuss these findings and establish an appropriate follow-up schedule."
+    abnormal_values: insights.abnormal_values || insights.abnormalValues || [],
+    health_recommendations: insights.health_recommendations || insights.recommendations || [],
+    family_screening: insights.family_screening_suggestions || insights.family_screening || [],
+    follow_up_timeline: insights.follow_up_timeline || insights.followup_timeline || "Please consult with your healthcare provider to discuss these findings and establish an appropriate follow-up schedule."
   };
 
-  // Transform key_findings array to categorized object
-  if (insights.key_findings && Array.isArray(insights.key_findings)) {
-    insights.key_findings.forEach((finding: any) => {
-      const category = finding.category?.toLowerCase() || '';
+  // Transform key_findings array to categorized object - handle various formats
+  const keyFindings = insights.key_findings || insights.keyFindings || insights.findings || [];
+
+  if (Array.isArray(keyFindings) && keyFindings.length > 0) {
+    console.log(`Processing ${keyFindings.length} key findings`);
+
+    keyFindings.forEach((finding: any) => {
+      const category = (finding.category || finding.type || '').toLowerCase();
 
       const mappedFinding = {
-        finding: finding.finding || finding.description || '',
-        significance: finding.significance || finding.explanation || '',
-        action: finding.action_needed || finding.recommendation || ''
+        finding: finding.finding || finding.description || finding.title || '',
+        significance: finding.significance || finding.explanation || finding.details || '',
+        action: finding.action_needed || finding.action || finding.recommendation || ''
       };
 
-      if (category.includes('genetic') || category.includes('family')) {
+      if (category.includes('genetic') || category.includes('family') || category.includes('hereditary')) {
         reportContent.key_findings.genetic.push(mappedFinding);
-      } else if (category.includes('lifestyle') || category.includes('diet') || category.includes('exercise')) {
+      } else if (category.includes('lifestyle') || category.includes('diet') || category.includes('exercise') || category.includes('nutrition')) {
         reportContent.key_findings.lifestyle.push(mappedFinding);
       } else if (category.includes('risk')) {
         reportContent.key_findings.risk_factors.push(mappedFinding);
@@ -68,7 +73,11 @@ function transformInsightsToReportFormat(insights: any): ReportSection {
         reportContent.key_findings.lifestyle.push(mappedFinding);
       }
     });
+  } else {
+    console.log("No key findings array found or empty, using empty arrays");
   }
+
+  console.log(`Transformation complete: ${reportContent.key_findings.genetic.length} genetic, ${reportContent.key_findings.lifestyle.length} lifestyle, ${reportContent.key_findings.risk_factors.length} risk findings`);
 
   return reportContent;
 }
@@ -790,12 +799,23 @@ Deno.serve(async (req: Request) => {
 
     // CRITICAL: Use existing insights data to ensure consistency
     // The downloaded report MUST match what user sees on screen
-    if (!existingInsights || !existingInsights.insights_data) {
+    if (!existingInsights) {
+      console.error("No health insights record found for session:", sessionId);
       return new Response(
         JSON.stringify({ error: "No health insights found. Please generate insights first." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    if (!existingInsights.insights_data) {
+      console.error("Health insights record exists but insights_data is null/empty:", existingInsights.id);
+      return new Response(
+        JSON.stringify({ error: "Health insights data is incomplete. Please regenerate insights." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Found existing insights with ID: ${existingInsights.id}, proceeding with report generation`);
 
     // Get lab reports and patient info for metadata only
     const { data: labReports, error: reportsError } = await supabase
@@ -882,22 +902,31 @@ Deno.serve(async (req: Request) => {
 
     // Use questions from existing insights (no regeneration for consistency)
     let questions = [];
-    if (includeQuestions && existingInsights.insights_data.questions_for_doctor) {
-      console.log("Using existing questions from insights (no regeneration)");
+    if (includeQuestions) {
+      // Try multiple possible field names for questions
+      const existingQuestions = existingInsights.insights_data.questions_for_doctor ||
+                                existingInsights.insights_data.questions ||
+                                existingInsights.insights_data.doctor_questions ||
+                                [];
 
-      // Transform existing questions to database format
-      const existingQuestions = existingInsights.insights_data.questions_for_doctor;
+      if (Array.isArray(existingQuestions) && existingQuestions.length > 0) {
+        console.log(`Using ${existingQuestions.length} existing questions from insights (no regeneration)`);
 
-      if (Array.isArray(existingQuestions)) {
-        existingQuestions.forEach((questionText: string, index: number) => {
-          questions.push({
-            question: questionText,
-            priority: index < 2 ? 'high' : index < 4 ? 'medium' : 'low',
-            category: 'general',
-            clinical_context: 'Generated from health insights analysis'
-          });
+        existingQuestions.forEach((questionItem: any, index: number) => {
+          // Handle both string questions and object questions
+          const questionText = typeof questionItem === 'string' ? questionItem : questionItem.question || questionItem.text || '';
+
+          if (questionText) {
+            questions.push({
+              question: questionText,
+              priority: index < 2 ? 'high' : index < 4 ? 'medium' : 'low',
+              category: typeof questionItem === 'object' ? (questionItem.category || 'general') : 'general',
+              clinical_context: typeof questionItem === 'object' ? (questionItem.context || 'Generated from health insights analysis') : 'Generated from health insights analysis'
+            });
+          }
         });
 
+        // Insert questions into database
         for (let i = 0; i < questions.length; i++) {
           await supabase.from("report_questions").insert({
             report_id: reportId,
@@ -909,6 +938,10 @@ Deno.serve(async (req: Request) => {
             sort_order: i
           });
         }
+
+        console.log(`Saved ${questions.length} questions to database`);
+      } else {
+        console.log("No questions found in insights data, skipping questions generation");
       }
     }
 
