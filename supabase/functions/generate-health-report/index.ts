@@ -33,21 +33,8 @@ const ALTHEA_LOGO_BASE64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEA
 
 // Helper function to get logo as base64 data URI
 async function getLogoBase64(): Promise<string> {
-  try {
-    // Primary: Use hardcoded base64 logo (always available)
-    if (ALTHEA_LOGO_BASE64 && ALTHEA_LOGO_BASE64.length > 100) {
-      console.log("Using hardcoded base64 logo");
-      return `data:image/jpeg;base64,${ALTHEA_LOGO_BASE64}`;
-    }
-
-    // Fallback: Return a small placeholder if somehow the constant is missing
-    console.warn("Logo base64 constant missing, using placeholder");
-    return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QTwvdGV4dD48L3N2Zz4=";
-  } catch (error) {
-    console.error("Error in getLogoBase64:", error);
-    // Return minimal SVG placeholder on any error
-    return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzIyYzU1ZSIvPjwvc3ZnPg==";
-  }
+  return `data:image/jpeg;base64,${ALTHEA_LOGO_BASE64}`;
+}`;
 }
 
 // Transform insights data directly to report format (no regeneration)
@@ -852,31 +839,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Reconstruct insights_data from database columns since it doesnt exist in schema
-    const insights_data = {
-      summary: existingInsights.greeting || "",
-      enhanced_summary: {
-        greeting: existingInsights.greeting || "",
-        overall_assessment: existingInsights.executive_summary || ""
-      },
-      key_findings: existingInsights.detailed_findings || [],
-      abnormal_values: existingInsights.detailed_findings || [],
-      questions_for_doctor: existingInsights.doctor_questions || [],
-      health_recommendations: [],
-      family_screening_suggestions: existingInsights.family_patterns || [],
-      follow_up_timeline: existingInsights.next_steps || "",
-      urgency_flag: "none"
-    };
-    
-    existingInsights.insights_data = insights_data;
-
-    if (!existingInsights.executive_summary) {
-      console.error("Health insights record exists but executive_summary is null/empty:", existingInsights.id);
+    if (!existingInsights.insights_data) {
+      console.error("Health insights record exists but insights_data is null/empty:", existingInsights.id);
       return new Response(
         JSON.stringify({ error: "Health insights data is incomplete. Please regenerate insights." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
     console.log(`Found existing insights with ID: ${existingInsights.id}, proceeding with report generation`);
 
     // Get lab reports and patient info for metadata only
@@ -948,6 +918,17 @@ Deno.serve(async (req: Request) => {
       console.error("Storage upload error:", uploadError);
     }
 
+    // Generate report title
+    const reportDate = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const patientName = patient?.name || '';
+    const reportTitle = patientName
+      ? `Health Report - ${patientName} - ${reportDate}`
+      : `Health Report - ${reportDate}`;
+
     // Save report to database
     const { data: savedReport, error: saveError } = await supabase
       .from("health_reports")
@@ -955,9 +936,13 @@ Deno.serve(async (req: Request) => {
         id: reportId,
         user_id: userId,
         session_id: sessionId,
+        title: reportTitle,
         report_type: reportType,
+        report_version: 1,
+        report_data: reportContent,
         storage_path: storagePath,
-        file_size: htmlContent.length
+        file_size: htmlContent.length,
+        generated_at: new Date().toISOString()
       })
       .select()
       .single();
@@ -1009,8 +994,20 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Note: Report is linked via session_id, no need to update health_insights
-    console.log(`Report ${reportId} created for session ${sessionId}`);
+    // Update health_insights with report reference (cache it)
+    if (existingInsights?.id) {
+      await supabase
+        .from("health_insights")
+        .update({
+          report_id: reportId,
+          report_storage_path: storagePath,
+          report_generated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existingInsights.id);
+
+      console.log(`Updated health_insights ${existingInsights.id} with report reference ${reportId}`);
+    }
 
     // Log access
     await supabase.from("report_access_log").insert({
