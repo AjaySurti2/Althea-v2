@@ -739,13 +739,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    let requestBody: ReportRequest;
+
+    try {
+      requestBody = await req.json();
+    } catch (parseError: any) {
+      console.error("Failed to parse request body:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid request body", details: parseError.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const {
       sessionId,
       reportType = "comprehensive",
       includeQuestions = true,
       forceRegenerate = false,
       insightsId
-    }: ReportRequest = await req.json();
+    } = requestBody;
 
     if (!sessionId) {
       return new Response(
@@ -918,17 +930,6 @@ Deno.serve(async (req: Request) => {
       console.error("Storage upload error:", uploadError);
     }
 
-    // Generate report title
-    const reportDate = new Date().toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    const patientName = patient?.name || '';
-    const reportTitle = patientName
-      ? `Health Report - ${patientName} - ${reportDate}`
-      : `Health Report - ${reportDate}`;
-
     // Save report to database
     const { data: savedReport, error: saveError } = await supabase
       .from("health_reports")
@@ -936,7 +937,6 @@ Deno.serve(async (req: Request) => {
         id: reportId,
         user_id: userId,
         session_id: sessionId,
-        title: reportTitle,
         report_type: reportType,
         report_version: 1,
         report_data: reportContent,
