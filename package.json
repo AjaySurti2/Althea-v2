@@ -9,7 +9,12 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "verify-env": "node verify-env.cjs"
+    "verify-env": "node verify-env.cjs",
+    "verify-db": "node verify-database.js",
+    "migrate-from-bolt": "node migrate-data-from-bolt.js",
+    "db:status": "npx supabase db remote status",
+    "db:push": "npx supabase db push",
+    "db:pull": "npx supabase db pull"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
