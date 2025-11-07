@@ -216,6 +216,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           body: JSON.stringify({
             sessionId: session.id,
             fileIds: uploadedFileIds,
+            forceReparse: false,
           }),
         });
 
