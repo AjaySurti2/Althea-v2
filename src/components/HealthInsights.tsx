@@ -91,14 +91,25 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       if (fetchError) throw fetchError;
 
       if (existingInsights) {
-        setInsights(existingInsights.insights_data);
+        // Reconstruct insights from database columns
+        const reconstructedInsights = {
+          summary: existingInsights.greeting || '',
+          enhanced_summary: {
+            greeting: existingInsights.greeting || '',
+            overall_assessment: existingInsights.executive_summary || ''
+          },
+          key_findings: existingInsights.detailed_findings || [],
+          abnormal_values: existingInsights.detailed_findings || [],
+          questions_for_doctor: existingInsights.doctor_questions || [],
+          health_recommendations: [],
+          family_screening_suggestions: existingInsights.family_patterns || [],
+          follow_up_timeline: existingInsights.next_steps || '',
+          urgency_flag: 'none'
+        };
+        setInsights(reconstructedInsights);
         // Simplified mode: Ignore stored preferences, always use defaults
 
-        // Check if report is already cached
-        if (existingInsights.report_storage_path) {
-          setReportStoragePath(existingInsights.report_storage_path);
-          setReportCached(true);
-        }
+        // Report caching not implemented in current schema
       } else {
         await generateInsights();
       }
@@ -188,13 +199,13 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       console.log('Verifying insights are saved before generating report...');
       const { data: savedInsights, error: verifyError } = await supabase
         .from('health_insights')
-        .select('id, insights_data')
+        .select('id, executive_summary, detailed_findings')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (verifyError || !savedInsights || !savedInsights.insights_data) {
+      if (verifyError || !savedInsights || !savedInsights.executive_summary) {
         console.error('Insights not yet saved to database, skipping report generation');
         setGeneratingReport(false);
         return;
@@ -261,13 +272,13 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       // CRITICAL: Verify insights exist before attempting report generation
       const { data: savedInsights, error: verifyError } = await supabase
         .from('health_insights')
-        .select('id, insights_data')
+        .select('id, executive_summary, detailed_findings')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (verifyError || !savedInsights || !savedInsights.insights_data) {
+      if (verifyError || !savedInsights || !savedInsights.executive_summary) {
         throw new Error('Health insights not found in database. Please wait for insights to finish generating.');
       }
 
