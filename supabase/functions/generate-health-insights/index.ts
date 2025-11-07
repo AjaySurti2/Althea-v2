@@ -315,22 +315,26 @@ Deno.serve(async (req: Request) => {
       languageLevel
     );
 
+    // Build executive summary from insights
+    const executiveSummary = `${insights.enhanced_summary?.greeting || insights.summary || ''}\n\n${insights.enhanced_summary?.overall_assessment || ''}\n\n${insights.enhanced_summary?.body_response_pattern || ''}`.trim();
+
     const { data: savedInsight, error: saveError } = await supabase
       .from("health_insights")
       .insert({
         session_id: sessionId,
         user_id: labReports[0].user_id,
-        insights_data: insights,
-        enhanced_summary: insights.enhanced_summary || {},
-        overall_health_status: insights.enhanced_summary?.overall_health_status || 'good',
-        executive_summary_generated_at: new Date().toISOString(),
+        greeting: insights.enhanced_summary?.greeting || `Hello ${patient?.name || 'there'}!`,
+        executive_summary: executiveSummary,
+        detailed_findings: insights.key_findings || insights.abnormal_values || [],
+        trend_analysis: [],
+        family_patterns: insights.family_screening_suggestions || [],
+        doctor_questions: insights.questions_for_doctor || [],
+        next_steps: insights.follow_up_timeline || '',
+        disclaimer: 'This interpretation is for educational purposes only. Please consult your healthcare provider for medical advice.',
         tone: tone,
         language_level: languageLevel,
-        metadata: {
-          report_count: labReports.length,
-          test_count: testResults?.length || 0,
-          generated_at: new Date().toISOString()
-        }
+        regeneration_count: 0,
+        parent_insight_id: null
       })
       .select()
       .single();
