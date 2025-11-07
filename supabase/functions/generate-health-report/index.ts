@@ -777,57 +777,57 @@ Deno.serve(async (req: Request) => {
       .limit(1)
       .maybeSingle();
 
-    // DISABLED - report caching not in current schema:     // Check if report already exists and should be reused
-    // DISABLED - report caching not in current schema:     if (!forceRegenerate && existingInsights?.report_id && existingInsights?.report_storage_path) {
-    // DISABLED - report caching not in current schema:       console.log(`Found cached report: ${existingInsights.report_id}, returning existing report`);
-    // DISABLED - report caching not in current schema: 
-    // DISABLED - report caching not in current schema:       // Verify the report still exists in storage
-    // DISABLED - report caching not in current schema:       const { data: reportExists } = await supabase.storage
-    // DISABLED - report caching not in current schema:         .from("health-reports")
-    // DISABLED - report caching not in current schema:         .list(existingInsights.report_storage_path.split('/')[0], {
-    // DISABLED - report caching not in current schema:           search: existingInsights.report_storage_path.split('/')[1]
-    // DISABLED - report caching not in current schema:         });
-    // DISABLED - report caching not in current schema: 
-    // DISABLED - report caching not in current schema:       if (reportExists && reportExists.length > 0) {
-    // DISABLED - report caching not in current schema:         // Get the report from database
-    // DISABLED - report caching not in current schema:         const { data: existingReport } = await supabase
-    // DISABLED - report caching not in current schema:           .from("health_reports")
-    // DISABLED - report caching not in current schema:           .select("*")
-    // DISABLED - report caching not in current schema:           .eq("id", existingInsights.report_id)
-    // DISABLED - report caching not in current schema:           .maybeSingle();
-    // DISABLED - report caching not in current schema: 
-    // DISABLED - report caching not in current schema:         // Get questions
-    // DISABLED - report caching not in current schema:         const { data: existingQuestions } = await supabase
-    // DISABLED - report caching not in current schema:           .from("report_questions")
-    // DISABLED - report caching not in current schema:           .select("*")
-    // DISABLED - report caching not in current schema:           .eq("report_id", existingInsights.report_id)
-    // DISABLED - report caching not in current schema:           .order("sort_order", { ascending: true });
-    // DISABLED - report caching not in current schema: 
-    // DISABLED - report caching not in current schema:         // Log access
-    // DISABLED - report caching not in current schema:         await supabase.from("report_access_log").insert({
-    // DISABLED - report caching not in current schema:           report_id: existingInsights.report_id,
-    // DISABLED - report caching not in current schema:           user_id: existingInsights.user_id,
-    // DISABLED - report caching not in current schema:           action: "reused_cached",
-    // DISABLED - report caching not in current schema:           accessed_at: new Date().toISOString()
-    // DISABLED - report caching not in current schema:         });
-    // DISABLED - report caching not in current schema: 
-    // DISABLED - report caching not in current schema:         return new Response(
-    // DISABLED - report caching not in current schema:           JSON.stringify({
-    // DISABLED - report caching not in current schema:             success: true,
-    // DISABLED - report caching not in current schema:             cached: true,
-    // DISABLED - report caching not in current schema:             report: existingReport,
-    // DISABLED - report caching not in current schema:             questions: existingQuestions || [],
-    // DISABLED - report caching not in current schema:             storage_path: existingInsights.report_storage_path,
-    // DISABLED - report caching not in current schema:             download_url: `${supabaseUrl}/storage/v1/object/public/health-reports/${existingInsights.report_storage_path}`
-    // DISABLED - report caching not in current schema:           }),
-    // DISABLED - report caching not in current schema:           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    // DISABLED - report caching not in current schema:         );
-    // DISABLED - report caching not in current schema:       } else {
-    // DISABLED - report caching not in current schema:         console.log("Cached report file not found in storage, regenerating...");
-    // DISABLED - report caching not in current schema:       }
-    // DISABLED - report caching not in current schema:     }
-    // DISABLED - report caching not in current schema: 
-    // DISABLED - report caching not in current schema:     console.log(`Generating new report for session: ${sessionId}`);
+    // Check if report already exists and should be reused
+    if (!forceRegenerate && existingInsights?.report_id && existingInsights?.report_storage_path) {
+      console.log(`Found cached report: ${existingInsights.report_id}, returning existing report`);
+
+      // Verify the report still exists in storage
+      const { data: reportExists } = await supabase.storage
+        .from("health-reports")
+        .list(existingInsights.report_storage_path.split('/')[0], {
+          search: existingInsights.report_storage_path.split('/')[1]
+        });
+
+      if (reportExists && reportExists.length > 0) {
+        // Get the report from database
+        const { data: existingReport } = await supabase
+          .from("health_reports")
+          .select("*")
+          .eq("id", existingInsights.report_id)
+          .maybeSingle();
+
+        // Get questions
+        const { data: existingQuestions } = await supabase
+          .from("report_questions")
+          .select("*")
+          .eq("report_id", existingInsights.report_id)
+          .order("sort_order", { ascending: true });
+
+        // Log access
+        await supabase.from("report_access_log").insert({
+          report_id: existingInsights.report_id,
+          user_id: existingInsights.user_id,
+          action: "reused_cached",
+          accessed_at: new Date().toISOString()
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            cached: true,
+            report: existingReport,
+            questions: existingQuestions || [],
+            storage_path: existingInsights.report_storage_path,
+            download_url: `${supabaseUrl}/storage/v1/object/public/health-reports/${existingInsights.report_storage_path}`
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else {
+        console.log("Cached report file not found in storage, regenerating...");
+      }
+    }
+
+    console.log(`Generating new report for session: ${sessionId}`);
 
     // CRITICAL: Use existing insights data to ensure consistency
     // The downloaded report MUST match what user sees on screen
@@ -839,23 +839,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Reconstruct insights_data from database columns since it doesn't exist in schema
+    // Reconstruct insights_data from database columns since it doesnt exist in schema
     const insights_data = {
-      summary: existingInsights.greeting || '',
+      summary: existingInsights.greeting || "",
       enhanced_summary: {
-        greeting: existingInsights.greeting || '',
-        overall_assessment: existingInsights.executive_summary || ''
+        greeting: existingInsights.greeting || "",
+        overall_assessment: existingInsights.executive_summary || ""
       },
       key_findings: existingInsights.detailed_findings || [],
       abnormal_values: existingInsights.detailed_findings || [],
       questions_for_doctor: existingInsights.doctor_questions || [],
       health_recommendations: [],
       family_screening_suggestions: existingInsights.family_patterns || [],
-      follow_up_timeline: existingInsights.next_steps || '',
-      urgency_flag: 'none'
+      follow_up_timeline: existingInsights.next_steps || "",
+      urgency_flag: "none"
     };
     
-    // Add reconstructed data to existingInsights for compatibility
     existingInsights.insights_data = insights_data;
 
     if (!existingInsights.executive_summary) {
