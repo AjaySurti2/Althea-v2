@@ -42,15 +42,6 @@ export async function updateProfile(input: UpdateProfileInput): Promise<{ data: 
       return { data: null, error: new Error(error.message) };
     }
 
-    await supabase.from('family_audit_log').insert({
-      user_id: user.id,
-      family_member_id: null,
-      action: 'update',
-      entity_type: 'profile',
-      entity_id: user.id,
-      changes_made: updateData,
-    });
-
     return { data, error: null };
   } catch (err) {
     return { data: null, error: err as Error };
@@ -103,15 +94,6 @@ export async function changePassword(input: ChangePasswordInput): Promise<{ succ
     if (updateError) {
       return { success: false, error: new Error(updateError.message) };
     }
-
-    await supabase.from('family_audit_log').insert({
-      user_id: user.id,
-      family_member_id: null,
-      action: 'update',
-      entity_type: 'profile',
-      entity_id: user.id,
-      changes_made: { password_changed: true },
-    });
 
     return { success: true, error: null };
   } catch (err) {
