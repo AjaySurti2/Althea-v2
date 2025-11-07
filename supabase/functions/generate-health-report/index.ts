@@ -33,8 +33,21 @@ const ALTHEA_LOGO_BASE64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEA
 
 // Helper function to get logo as base64 data URI
 async function getLogoBase64(): Promise<string> {
-  return `data:image/jpeg;base64,${ALTHEA_LOGO_BASE64}`;
-}`;
+  try {
+    // Primary: Use hardcoded base64 logo (always available)
+    if (ALTHEA_LOGO_BASE64 && ALTHEA_LOGO_BASE64.length > 100) {
+      console.log("Using hardcoded base64 logo");
+      return `data:image/jpeg;base64,${ALTHEA_LOGO_BASE64}`;
+    }
+
+    // Fallback: Return a small placeholder if somehow the constant is missing
+    console.warn("Logo base64 constant missing, using placeholder");
+    return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QTwvdGV4dD48L3N2Zz4=";
+  } catch (error) {
+    console.error("Error in getLogoBase64:", error);
+    // Return minimal SVG placeholder on any error
+    return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzIyYzU1ZSIvPjwvc3ZnPg==";
+  }
 }
 
 // Transform insights data directly to report format (no regeneration)
