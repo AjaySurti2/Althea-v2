@@ -956,11 +956,8 @@ Deno.serve(async (req: Request) => {
         user_id: userId,
         session_id: sessionId,
         report_type: reportType,
-        report_version: 1,
-        report_data: reportContent,
         storage_path: storagePath,
-        file_size: htmlContent.length,
-        generated_at: new Date().toISOString()
+        file_size: htmlContent.length
       })
       .select()
       .single();
@@ -1012,20 +1009,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Update health_insights with report reference (cache it)
-    if (existingInsights?.id) {
-      await supabase
-        .from("health_insights")
-        .update({
-          report_id: reportId,
-          report_storage_path: storagePath,
-          report_generated_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", existingInsights.id);
-
-      console.log(`Updated health_insights ${existingInsights.id} with report reference ${reportId}`);
-    }
+    // Note: Report is linked via session_id, no need to update health_insights
+    console.log(`Report ${reportId} created for session ${sessionId}`);
 
     // Log access
     await supabase.from("report_access_log").insert({
