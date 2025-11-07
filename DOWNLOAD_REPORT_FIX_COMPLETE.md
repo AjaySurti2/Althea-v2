@@ -58,10 +58,23 @@ const { data: savedReport, error: saveError } = await supabase
 - The fix addresses the database constraint violation
 - Report titles will now be descriptive and include patient name and date
 
-## Next Steps
-The Edge Function has been updated locally. To deploy the changes to your Supabase project:
+## Current Status
+✅ Code fix applied successfully
+✅ Build completed without errors
+⚠️ **Edge Function needs to be deployed to Supabase**
 
-1. The Edge Function will be automatically deployed when you push your changes
+## Deployment Required
+
+The updated Edge Function code is ready but needs to be deployed. See `EDGE_FUNCTION_DEPLOYMENT_GUIDE.md` for detailed deployment instructions.
+
+**Quick Deploy Command:**
+```bash
+npx supabase functions deploy generate-health-report
+```
+
+## Next Steps
+
+1. Deploy the Edge Function using one of the methods in `EDGE_FUNCTION_DEPLOYMENT_GUIDE.md`
 2. Test the "Download Report" functionality after deployment
 3. Verify that reports are being generated with proper titles
 4. Check that the titles appear correctly in any report listing interfaces
