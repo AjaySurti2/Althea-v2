@@ -66,88 +66,12 @@ const MEDICAL_PARSING_PROMPT = `You are an expert medical data extraction AI. Ex
 
 Return ONLY valid JSON, no explanations.`;
 
-async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "gpt-4o-mini"): Promise<string> {
-  const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiApiKey) {
-    console.error("❌ OPENAI_API_KEY not found in environment");
-    throw new Error("OPENAI_API_KEY not configured");
-  }
-
-  try {
-    console.log(`📄 Converting PDF to base64 (${arrayBuffer.byteLength} bytes)...`);
-
-    const uint8Array = new Uint8Array(arrayBuffer);
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-      binary += String.fromCharCode(...chunk);
-    }
-    const base64Pdf = btoa(binary);
-
-    console.log(`✅ Base64 conversion complete (${base64Pdf.length} chars)`);
-    console.log(`🤖 Calling OpenAI API with ${model}...`);
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Extract ALL text from this medical report PDF. Include patient details, lab information, ALL test results with values, units, and reference ranges. Preserve exact formatting and numbers.",
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${base64Pdf}`,
-                detail: "high"
-              },
-            },
-          ],
-        }],
-        max_tokens: 4096,
-      }),
-    });
-
-    console.log(`📡 OpenAI API response status: ${response.status}`);
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`❌ PDF extraction failed (${model}): ${response.status}`);
-      console.error(`Error details: ${errorBody}`);
-      throw new Error(`OpenAI API error ${response.status}: ${errorBody.substring(0, 200)}`);
-    }
-
-    const result = await response.json();
-    const text = result.choices?.[0]?.message?.content || "";
-
-    if (!text || text.length < 20) {
-      console.error(`⚠️ Extracted text too short: ${text.length} chars`);
-      console.error(`Text preview: "${text}"`);
-      throw new Error(`Insufficient text extracted (${text.length} chars) - document may be empty or corrupted`);
-    }
-
-    if (text.length < 100) {
-      console.warn(`⚠️ Warning: Extracted text is very short (${text.length} chars): "${text}"`);
-    }
-
-    console.log(`✅ PDF extracted with ${model}: ${text.length} chars`);
-    console.log(`Text preview: ${text.substring(0, 200)}...`);
-    return text;
-  } catch (error: any) {
-    console.error("❌ PDF extraction error:", error.message || error);
-    throw error;
-  }
+async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "gpt-4o"): Promise<string> {
+  console.error("❌ PDF format is not supported by OpenAI Vision API");
+  throw new Error("PDF files cannot be processed with OpenAI Vision API. Please convert PDF to images (PNG/JPG) or use a PDF parsing library.");
 }
 
-async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, model: string = "gpt-4o-mini"): Promise<string> {
+async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, model: string = "gpt-4o"): Promise<string> {
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
   if (!openaiApiKey) {
     console.error("❌ OPENAI_API_KEY not found in environment");
@@ -270,9 +194,9 @@ async function parseWithAI(documentText: string, fileName: string, attemptNumber
   }
 
   const models = [
-    "gpt-4o-mini",
     "gpt-4o",
-    "gpt-4-turbo"
+    "gpt-4o",
+    "gpt-4o"
   ];
 
   const model = models[Math.min(attemptNumber - 1, models.length - 1)];
