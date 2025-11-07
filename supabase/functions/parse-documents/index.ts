@@ -66,11 +66,11 @@ const MEDICAL_PARSING_PROMPT = `You are an expert medical data extraction AI. Ex
 
 Return ONLY valid JSON, no explanations.`;
 
-async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "claude-3-haiku-20240307"): Promise<string> {
-  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!anthropicApiKey) {
-    console.error("❌ ANTHROPIC_API_KEY not found in environment");
-    throw new Error("ANTHROPIC_API_KEY not configured");
+async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "gpt-4o-mini"): Promise<string> {
+  const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!openaiApiKey) {
+    console.error("❌ OPENAI_API_KEY not found in environment");
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
   try {
@@ -86,49 +86,47 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "cla
     const base64Pdf = btoa(binary);
 
     console.log(`✅ Base64 conversion complete (${base64Pdf.length} chars)`);
+    console.log(`🤖 Calling OpenAI API with ${model}...`);
 
-    console.log(`🤖 Calling Anthropic API with ${model}...`);
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": anthropicApiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${openaiApiKey}`,
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
         messages: [{
           role: "user",
           content: [
             {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Pdf,
-              },
-            },
-            {
               type: "text",
               text: "Extract ALL text from this medical report PDF. Include patient details, lab information, ALL test results with values, units, and reference ranges. Preserve exact formatting and numbers.",
             },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:application/pdf;base64,${base64Pdf}`,
+                detail: "high"
+              },
+            },
           ],
         }],
+        max_tokens: 4096,
       }),
     });
 
-    console.log(`📡 Anthropic API response status: ${response.status}`);
+    console.log(`📡 OpenAI API response status: ${response.status}`);
 
     if (!response.ok) {
       const errorBody = await response.text();
       console.error(`❌ PDF extraction failed (${model}): ${response.status}`);
       console.error(`Error details: ${errorBody}`);
-      throw new Error(`Anthropic API error ${response.status}: ${errorBody.substring(0, 200)}`);
+      throw new Error(`OpenAI API error ${response.status}: ${errorBody.substring(0, 200)}`);
     }
 
     const result = await response.json();
-    const text = result.content?.[0]?.text || "";
+    const text = result.choices?.[0]?.message?.content || "";
 
     if (!text || text.length < 20) {
       console.error(`⚠️ Extracted text too short: ${text.length} chars`);
@@ -149,11 +147,11 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer, model: string = "cla
   }
 }
 
-async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, model: string = "claude-3-haiku-20240307"): Promise<string> {
-  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!anthropicApiKey) {
-    console.error("❌ ANTHROPIC_API_KEY not found in environment");
-    throw new Error("ANTHROPIC_API_KEY not configured");
+async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, model: string = "gpt-4o-mini"): Promise<string> {
+  const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!openaiApiKey) {
+    console.error("❌ OPENAI_API_KEY not found in environment");
+    throw new Error("OPENAI_API_KEY not configured");
   }
 
   try {
@@ -166,33 +164,33 @@ async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, 
     }
     const base64Image = btoa(binary);
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    console.log(`🤖 Calling OpenAI API for image OCR with ${model}...`);
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": anthropicApiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${openaiApiKey}`,
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
         messages: [{
           role: "user",
           content: [
             {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mimeType || "image/jpeg",
-                data: base64Image,
-              },
-            },
-            {
               type: "text",
               text: "Extract ALL text from this medical report image. Include patient info, ALL test names, observed values, units, and reference ranges exactly as shown.",
             },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeType || "image/jpeg"};base64,${base64Image}`,
+                detail: "high"
+              },
+            },
           ],
         }],
+        max_tokens: 4096,
       }),
     });
 
@@ -200,11 +198,11 @@ async function extractTextFromImage(arrayBuffer: ArrayBuffer, mimeType: string, 
       const errorBody = await response.text();
       console.error(`❌ Image OCR failed (${model}): ${response.status}`);
       console.error(`Error details: ${errorBody}`);
-      throw new Error(`Anthropic API error ${response.status}: ${errorBody.substring(0, 200)}`);
+      throw new Error(`OpenAI API error ${response.status}: ${errorBody.substring(0, 200)}`);
     }
 
     const result = await response.json();
-    const text = result.content?.[0]?.text || "";
+    const text = result.choices?.[0]?.message?.content || "";
 
     if (!text || text.length < 20) {
       console.error(`⚠️ Extracted text too short: ${text.length} chars`);
@@ -255,10 +253,10 @@ function validateParsedData(data: any): { isValid: boolean; issues: string[] } {
 }
 
 async function parseWithAI(documentText: string, fileName: string, attemptNumber: number = 1): Promise<any> {
-  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-  if (!anthropicApiKey) {
-    console.error("❌ ANTHROPIC_API_KEY not configured");
+  if (!openaiApiKey) {
+    console.error("❌ OPENAI_API_KEY not configured");
     throw new Error("API key not configured");
   }
 
@@ -272,9 +270,9 @@ async function parseWithAI(documentText: string, fileName: string, attemptNumber
   }
 
   const models = [
-    "claude-3-haiku-20240307",
-    "claude-3-5-sonnet-20240620",
-    "claude-3-opus-20240229"
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4-turbo"
   ];
 
   const model = models[Math.min(attemptNumber - 1, models.length - 1)];
@@ -282,21 +280,20 @@ async function parseWithAI(documentText: string, fileName: string, attemptNumber
   console.log(`📄 Text preview: ${documentText.substring(0, 400)}...`);
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": anthropicApiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${openaiApiKey}`,
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
-        temperature: 0.1,
         messages: [{
           role: "user",
           content: `${MEDICAL_PARSING_PROMPT}\n\n**REPORT TEXT:**\n${documentText.substring(0, 12000)}`,
         }],
+        temperature: 0.1,
+        max_tokens: 4096,
       }),
     });
 
@@ -306,7 +303,7 @@ async function parseWithAI(documentText: string, fileName: string, attemptNumber
     }
 
     const result = await response.json();
-    const content = result.content[0].text;
+    const content = result.choices?.[0]?.message?.content || "";
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -554,15 +551,15 @@ Deno.serve(async (req: Request) => {
             try {
               documentText = await extractTextFromPDF(arrayBuffer);
             } catch (error: any) {
-              console.log(`⚠️ Haiku failed, retrying with Sonnet: ${error.message}`);
-              documentText = await extractTextFromPDF(arrayBuffer, "claude-3-5-sonnet-20240620");
+              console.log(`⚠️ gpt-4o-mini failed, retrying with gpt-4o: ${error.message}`);
+              documentText = await extractTextFromPDF(arrayBuffer, "gpt-4o");
             }
           } else if (fileData.file_type.startsWith("image/")) {
             try {
               documentText = await extractTextFromImage(arrayBuffer, fileData.file_type);
             } catch (error: any) {
-              console.log(`⚠️ Haiku failed, retrying with Sonnet: ${error.message}`);
-              documentText = await extractTextFromImage(arrayBuffer, fileData.file_type, "claude-3-5-sonnet-20240620");
+              console.log(`⚠️ gpt-4o-mini failed, retrying with gpt-4o: ${error.message}`);
+              documentText = await extractTextFromImage(arrayBuffer, fileData.file_type, "gpt-4o");
             }
           }
         } catch (extractError: any) {
