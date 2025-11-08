@@ -64,18 +64,15 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
     loadInsights();
   }, [sessionId]);
 
-  // Auto-generate report in background after insights are loaded (Step 3)
-  // Only generate if report is not already cached
+  // DISABLED: Background report generation causes CORS issues in development
+  // Reports will be generated on-demand when user clicks Download
+  // This ensures reports are only generated when actually needed
+  // and avoids failed fetch attempts that block the UI
   useEffect(() => {
-    if (insights && !reportCached && !generatingReport && !loading) {
-      // Delay to prevent race conditions with component state
-      const timer = setTimeout(() => {
-        console.log('Triggering background report generation - no cached report available');
-        generateReportInBackground();
-      }, 500);
-      return () => clearTimeout(timer);
-    } else if (insights && reportCached && !loading) {
-      console.log('Report already cached, skipping background generation');
+    if (insights && reportCached && !loading) {
+      console.log('Report already cached and ready for download');
+    } else if (insights && !reportCached && !loading) {
+      console.log('No cached report - will generate on-demand when user clicks Download');
     }
   }, [insights, reportCached, loading]);
 
@@ -203,26 +200,29 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
     await generateInsights();
   };
 
-  // Generate report in background (called automatically in Step 3)
-  const generateReportInBackground = async () => {
-    // Prevent multiple simultaneous calls
-    if (generatingReport) {
-      console.log('Report generation already in progress, skipping');
-      return;
-    }
+  // REMOVED: Background report generation - now only generates on-demand
+  // This function is no longer called to prevent CORS and unnecessary API calls
 
+  // Handle report download - generates on-demand only when user clicks
+  const handleGenerateReport = async () => {
     try {
       setGeneratingReport(true);
+      setError(null);
+
+      console.log('=== Download Report Button Clicked ===');
 
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.warn('No active session for background report generation');
-        setGeneratingReport(false);
+      if (!session) throw new Error('Not authenticated');
+
+      // STEP 1: If already cached in component state, download directly
+      if (reportCached && reportStoragePath) {
+        console.log('✓ Report cached in state, downloading directly:', reportStoragePath);
+        await downloadReport(reportStoragePath);
         return;
       }
 
-      // CRITICAL: Check if report already exists in database before generating
-      console.log('Checking for existing cached report in database...');
+      // STEP 2: Check database for cached report (from previous session or generation)
+      console.log('Checking database for existing report...');
       const { data: savedInsights, error: verifyError } = await supabase
         .from('health_insights')
         .select('id, executive_summary, detailed_findings, report_storage_path, report_id')
@@ -231,149 +231,90 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         .limit(1)
         .maybeSingle();
 
-      if (verifyError || !savedInsights || !savedInsights.executive_summary) {
-        console.error('Insights not yet saved to database, skipping report generation');
-        setGeneratingReport(false);
-        return;
+      if (verifyError) {
+        throw new Error('Failed to query database: ' + verifyError.message);
       }
 
-      // If report already cached, skip generation
+      if (!savedInsights) {
+        throw new Error('Health insights not found. Please refresh the page.');
+      }
+
+      // STEP 3: If database has cached report, verify and download
       if (savedInsights.report_storage_path) {
-        console.log('Report already cached in database, verifying file exists...');
-        const { data: fileExists, error: storageError } = await supabase.storage
+        console.log('✓ Found cached report in database:', savedInsights.report_storage_path);
+
+        // Verify file exists in storage
+        const pathParts = savedInsights.report_storage_path.split('/');
+        const { data: fileCheck, error: storageError } = await supabase.storage
           .from('health-reports')
-          .list(savedInsights.report_storage_path.split('/')[0], {
-            search: savedInsights.report_storage_path.split('/').slice(1).join('/')
+          .list(pathParts[0], {
+            search: pathParts.slice(1).join('/')
           });
 
-        if (!storageError && fileExists && fileExists.length > 0) {
-          console.log('Cached report verified, skipping background generation');
+        if (!storageError && fileCheck && fileCheck.length > 0) {
+          console.log('✓ Report file verified in storage, downloading...');
           setReportStoragePath(savedInsights.report_storage_path);
           setReportCached(true);
-          setGeneratingReport(false);
+          await downloadReport(savedInsights.report_storage_path);
           return;
         } else {
-          console.log('Cached report path exists but file missing, will regenerate');
+          console.log('⚠ Cached path exists but file missing in storage, will regenerate');
         }
       }
 
-      console.log('No cached report found, auto-generating report in background for session:', sessionId);
+      // STEP 4: No cached report - generate new one
+      console.log('No cached report available, generating new report...');
+      console.log('Calling edge function for session:', sessionId);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          sessionId,
-          reportType: 'comprehensive',
-          includeQuestions: true
-        })
-      });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Background report generation failed:', response.status, errorText);
-        setGeneratingReport(false);
-        return; // Don't throw error - just log it
-      }
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            sessionId,
+            reportType: 'comprehensive',
+            includeQuestions: true
+          })
+        });
 
-      const result = await response.json();
-      console.log('Background report generation result:', result.cached ? 'Using cached' : 'New report created');
+        if (!response.ok) {
+          let errorMsg = 'Failed to generate report';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorMsg;
+          } catch {
+            errorMsg = `Server error: ${response.status} ${response.statusText}`;
+          }
+          throw new Error(errorMsg);
+        }
 
-      if (result.storage_path) {
-        // Cache the report path for instant download later
-        console.log('Caching report path for instant download:', result.storage_path);
-        setReportStoragePath(result.storage_path);
-        setReportCached(true);
-      }
-    } catch (err: any) {
-      console.error('Error in background report generation:', err);
-      // Don't show error to user - this is a background operation
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
+        const result = await response.json();
+        console.log('✓ Report generated successfully');
+        console.log('Cached:', result.cached, 'Storage path:', result.storage_path);
 
-  // Handle report download (Step 4 - downloads cached report from Step 3)
-  const handleGenerateReport = async () => {
-    try {
-      setGeneratingReport(true);
-      setError(null);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      // PRIORITY: If report is already cached, download directly without any API calls
-      if (reportCached && reportStoragePath) {
-        console.log('=== DIRECT DOWNLOAD: Using cached report ===');
-        console.log('Storage path:', reportStoragePath);
-        await downloadReport(reportStoragePath);
-        return;
-      }
-
-      // Fallback: Check database one more time for cached report
-      console.log('Report not in state, checking database for cached version...');
-      const { data: savedInsights, error: verifyError } = await supabase
-        .from('health_insights')
-        .select('id, executive_summary, detailed_findings, report_storage_path')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (verifyError || !savedInsights) {
-        throw new Error('Health insights not found in database. Please refresh the page.');
-      }
-
-      // Check if database has cached report path
-      if (savedInsights.report_storage_path) {
-        console.log('Found cached report in database:', savedInsights.report_storage_path);
-        setReportStoragePath(savedInsights.report_storage_path);
-        setReportCached(true);
-        await downloadReport(savedInsights.report_storage_path);
-        return;
-      }
-
-      // Last resort: Generate report now (user clicked before background generation completed)
-      console.log('No cached report available, generating on demand...');
-
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          sessionId,
-          reportType: 'comprehensive',
-          includeQuestions: true
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate report');
-      }
-
-      const result = await response.json();
-      console.log('On-demand report generation result:', result.cached ? 'Using cached' : 'Generated new');
-
-      if (result.storage_path) {
-        setReportStoragePath(result.storage_path);
-        setReportCached(true);
-        await downloadReport(result.storage_path);
-      } else {
-        throw new Error('No storage path returned from report generation');
+        if (result.storage_path) {
+          setReportStoragePath(result.storage_path);
+          setReportCached(true);
+          await downloadReport(result.storage_path);
+        } else {
+          throw new Error('No storage path returned from report generation');
+        }
+      } catch (fetchError: any) {
+        // Handle CORS and network errors specifically
+        if (fetchError.message.includes('Failed to fetch') || fetchError.name === 'TypeError') {
+          throw new Error('Network error: Unable to connect to report generation service. Please check your internet connection or try again later.');
+        }
+        throw fetchError;
       }
     } catch (err: any) {
-      console.error('Error with report download:', err);
-      setError(err.message);
+      console.error('✗ Error with report download:', err);
+      setError(err.message || 'An unexpected error occurred');
     } finally {
       setGeneratingReport(false);
     }
