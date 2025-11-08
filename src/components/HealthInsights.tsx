@@ -65,13 +65,17 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   }, [sessionId]);
 
   // Auto-generate report in background after insights are loaded (Step 3)
+  // Only generate if report is not already cached
   useEffect(() => {
     if (insights && !reportCached && !generatingReport && !loading) {
       // Delay to prevent race conditions with component state
       const timer = setTimeout(() => {
+        console.log('Triggering background report generation - no cached report available');
         generateReportInBackground();
       }, 500);
       return () => clearTimeout(timer);
+    } else if (insights && reportCached && !loading) {
+      console.log('Report already cached, skipping background generation');
     }
   }, [insights, reportCached, loading]);
 
@@ -109,7 +113,27 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         setInsights(reconstructedInsights);
         // Simplified mode: Ignore stored preferences, always use defaults
 
-        // Report caching not implemented in current schema
+        // Check if report is already cached in database
+        if (existingInsights.report_storage_path) {
+          console.log('Found cached report path in database:', existingInsights.report_storage_path);
+
+          // Verify the report file still exists in storage
+          const { data: fileExists, error: storageError } = await supabase.storage
+            .from('health-reports')
+            .list(existingInsights.report_storage_path.split('/')[0], {
+              search: existingInsights.report_storage_path.split('/').slice(1).join('/')
+            });
+
+          if (!storageError && fileExists && fileExists.length > 0) {
+            console.log('Report file verified in storage, marking as cached');
+            setReportStoragePath(existingInsights.report_storage_path);
+            setReportCached(true);
+          } else {
+            console.log('Cached report path found but file missing in storage, will regenerate on demand');
+          }
+        } else {
+          console.log('No cached report path found, will generate in background');
+        }
       } else {
         await generateInsights();
       }
@@ -193,14 +217,15 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         console.warn('No active session for background report generation');
+        setGeneratingReport(false);
         return;
       }
 
-      // CRITICAL: Verify insights are saved in database before generating report
-      console.log('Verifying insights are saved before generating report...');
+      // CRITICAL: Check if report already exists in database before generating
+      console.log('Checking for existing cached report in database...');
       const { data: savedInsights, error: verifyError } = await supabase
         .from('health_insights')
-        .select('id, executive_summary, detailed_findings')
+        .select('id, executive_summary, detailed_findings, report_storage_path, report_id')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -212,7 +237,27 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         return;
       }
 
-      console.log('Insights confirmed in database, auto-generating report in background for session:', sessionId);
+      // If report already cached, skip generation
+      if (savedInsights.report_storage_path) {
+        console.log('Report already cached in database, verifying file exists...');
+        const { data: fileExists, error: storageError } = await supabase.storage
+          .from('health-reports')
+          .list(savedInsights.report_storage_path.split('/')[0], {
+            search: savedInsights.report_storage_path.split('/').slice(1).join('/')
+          });
+
+        if (!storageError && fileExists && fileExists.length > 0) {
+          console.log('Cached report verified, skipping background generation');
+          setReportStoragePath(savedInsights.report_storage_path);
+          setReportCached(true);
+          setGeneratingReport(false);
+          return;
+        } else {
+          console.log('Cached report path exists but file missing, will regenerate');
+        }
+      }
+
+      console.log('No cached report found, auto-generating report in background for session:', sessionId);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
       const response = await fetch(apiUrl, {
@@ -232,14 +277,16 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Background report generation failed:', response.status, errorText);
+        setGeneratingReport(false);
         return; // Don't throw error - just log it
       }
 
       const result = await response.json();
-      console.log('Background report generated:', result.cached ? 'Using cached' : 'New report created');
+      console.log('Background report generation result:', result.cached ? 'Using cached' : 'New report created');
 
       if (result.storage_path) {
         // Cache the report path for instant download later
+        console.log('Caching report path for instant download:', result.storage_path);
         setReportStoragePath(result.storage_path);
         setReportCached(true);
       }
@@ -260,30 +307,39 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // If report is already cached from Step 3, just download it
+      // PRIORITY: If report is already cached, download directly without any API calls
       if (reportCached && reportStoragePath) {
-        console.log('Downloading cached report from Step 3:', reportStoragePath);
+        console.log('=== DIRECT DOWNLOAD: Using cached report ===');
+        console.log('Storage path:', reportStoragePath);
         await downloadReport(reportStoragePath);
         return;
       }
 
-      // If not cached yet (shouldn't happen in normal flow), generate it now
-      console.log('Report not cached, generating now for session:', sessionId);
-
-      // CRITICAL: Verify insights exist before attempting report generation
+      // Fallback: Check database one more time for cached report
+      console.log('Report not in state, checking database for cached version...');
       const { data: savedInsights, error: verifyError } = await supabase
         .from('health_insights')
-        .select('id, executive_summary, detailed_findings')
+        .select('id, executive_summary, detailed_findings, report_storage_path')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (verifyError || !savedInsights || !savedInsights.executive_summary) {
-        throw new Error('Health insights not found in database. Please wait for insights to finish generating.');
+      if (verifyError || !savedInsights) {
+        throw new Error('Health insights not found in database. Please refresh the page.');
       }
 
-      console.log('Insights verified in database, proceeding with report generation');
+      // Check if database has cached report path
+      if (savedInsights.report_storage_path) {
+        console.log('Found cached report in database:', savedInsights.report_storage_path);
+        setReportStoragePath(savedInsights.report_storage_path);
+        setReportCached(true);
+        await downloadReport(savedInsights.report_storage_path);
+        return;
+      }
+
+      // Last resort: Generate report now (user clicked before background generation completed)
+      console.log('No cached report available, generating on demand...');
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
       const response = await fetch(apiUrl, {
@@ -306,7 +362,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       }
 
       const result = await response.json();
-      console.log('Report result:', result.cached ? 'Using cached' : 'Generated new');
+      console.log('On-demand report generation result:', result.cached ? 'Using cached' : 'Generated new');
 
       if (result.storage_path) {
         setReportStoragePath(result.storage_path);
@@ -316,7 +372,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         throw new Error('No storage path returned from report generation');
       }
     } catch (err: any) {
-      console.error('Error with report:', err);
+      console.error('Error with report download:', err);
       setError(err.message);
     } finally {
       setGeneratingReport(false);
