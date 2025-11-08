@@ -308,7 +308,10 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       } catch (fetchError: any) {
         // Handle CORS and network errors specifically
         if (fetchError.message.includes('Failed to fetch') || fetchError.name === 'TypeError') {
-          throw new Error('Network error: Unable to connect to report generation service. Please check your internet connection or try again later.');
+          console.log('⚠ Edge function call failed (likely CORS in local dev), generating report client-side...');
+          // Fallback: Generate report client-side for local development
+          await generateReportClientSide();
+          return;
         }
         throw fetchError;
       }
@@ -317,6 +320,116 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       setError(err.message || 'An unexpected error occurred');
     } finally {
       setGeneratingReport(false);
+    }
+  };
+
+  // Generate report HTML client-side (fallback for CORS errors in local dev)
+  const generateReportClientSide = async () => {
+    try {
+      console.log('Generating report HTML client-side...');
+
+      // Use the insights data already displayed on screen
+      if (!insights) {
+        throw new Error('No insights data available');
+      }
+
+      // Create HTML report matching the displayed content
+      const reportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Althea Health Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; line-height: 1.6; color: #333; background: #f9fafb; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #10b981; }
+    .logo { font-size: 32px; font-weight: bold; color: #10b981; }
+    .subtitle { font-size: 14px; font-style: italic; color: #059669; }
+    .date { text-align: right; color: #6b7280; font-size: 14px; }
+    h1 { color: #10b981; font-size: 28px; margin: 30px 0 15px; }
+    h2 { color: #059669; font-size: 22px; margin: 25px 0 15px; padding-bottom: 10px; border-bottom: 2px solid #d1fae5; }
+    h3 { color: #047857; font-size: 18px; margin: 20px 0 10px; }
+    .section { margin: 25px 0; padding: 20px; background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 8px; }
+    .finding { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #d1fae5; }
+    .question { background: white; padding: 12px 15px; margin: 8px 0; border-radius: 6px; display: flex; align-items: start; gap: 12px; }
+    .question-number { background: #10b981; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+    .disclaimer { background: #fef3c7; border: 2px solid #fbbf24; padding: 15px; border-radius: 8px; margin: 30px 0; color: #92400e; }
+    strong { color: #047857; }
+    ul { margin: 10px 0; padding-left: 25px; }
+    li { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="logo">Althea</div>
+        <div class="subtitle">Your Personal Health Interpreter</div>
+      </div>
+      <div class="date">
+        <strong>Health Insights Report</strong><br>
+        ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+      </div>
+    </div>
+
+    <h1>Executive Summary</h1>
+    <div class="section">
+      <p>${insights.summary || insights.enhanced_summary?.overall_assessment || 'Your health insights are ready for review.'}</p>
+    </div>
+
+    ${insights.key_findings && insights.key_findings.length > 0 ? `
+    <h2>Key Findings</h2>
+    ${insights.key_findings.map((finding: any) => `
+      <div class="finding">
+        <h3>${finding.category || 'Finding'}</h3>
+        <p><strong>Finding:</strong> ${finding.finding}</p>
+        <p><strong>Significance:</strong> ${finding.significance}</p>
+        <p><strong>Action:</strong> ${finding.action_needed}</p>
+      </div>
+    `).join('')}
+    ` : ''}
+
+    ${insights.questions_for_doctor && insights.questions_for_doctor.length > 0 ? `
+    <h2>Questions for Your Doctor</h2>
+    ${insights.questions_for_doctor.map((q: string, i: number) => `
+      <div class="question">
+        <div class="question-number">${i + 1}</div>
+        <div>${q}</div>
+      </div>
+    `).join('')}
+    ` : ''}
+
+    ${insights.follow_up_timeline ? `
+    <h2>Follow-up Timeline</h2>
+    <div class="section">
+      <p>${insights.follow_up_timeline}</p>
+    </div>
+    ` : ''}
+
+    <div class="disclaimer">
+      <strong>Disclaimer:</strong> These insights are for informational purposes only and do not constitute medical advice. Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.
+    </div>
+  </div>
+</body>
+</html>`;
+
+      // Create blob and download
+      const blob = new Blob([reportHtml], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `althea-health-report-${sessionId.substring(0, 8)}.html`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log('✓ Report generated and downloaded client-side');
+    } catch (err: any) {
+      console.error('✗ Client-side report generation failed:', err);
+      throw new Error('Failed to generate report: ' + err.message);
     }
   };
 
