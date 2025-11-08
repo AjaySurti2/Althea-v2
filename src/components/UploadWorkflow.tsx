@@ -39,12 +39,21 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const checkApiKeyStatus = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log('No session available for API key check');
+        setApiKeyStatus({ configured: false, tested: false, working: false });
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-api-key`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
         }
       );
@@ -768,7 +777,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleHealthInsightsContinue = () => {
     setShowHealthInsights(false);
-    setShowReview(true);
+    handleViewDashboard();
   };
 
   const handleHealthInsightsBack = () => {
