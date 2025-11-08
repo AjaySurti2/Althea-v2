@@ -209,7 +209,7 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
         <div className="text-center mb-16">
           <div className="flex items-center justify-center space-x-4 mb-6">
             <img
-              src="/Althea-Logo-Green.jpg"
+              src="/AltheaLogoGreen.jpg"
               alt="Althea Logo"
               className="h-16 w-16 object-contain"
             />
@@ -354,7 +354,7 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ darkMode, onAuthRequired
             }`}>
               <div className="absolute top-4 right-4 z-10">
                 <img
-                  src="/Althea-Logo-Green.jpg"
+                  src="/AltheaLogoGreen.jpg"
                   alt="Althea"
                   className="h-8 w-8 object-contain opacity-60"
                 />

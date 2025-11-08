@@ -15,7 +15,7 @@ export const Footer: React.FC<FooterProps> = ({ darkMode }) => {
           <div>
             <div className="flex items-center space-x-3 mb-4">
               <img
-                src="/Althea-Logo-Green.jpg"
+                src="/AltheaLogoGreen.jpg"
                 alt="Althea Logo"
                 className="h-10 w-10 rounded-lg object-cover"
               />

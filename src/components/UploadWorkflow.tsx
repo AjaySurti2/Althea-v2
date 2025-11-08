@@ -993,7 +993,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 {/* Logo */}
                 <div className="mb-4">
                   <img
-                    src="/Althea-Logo-Green.jpg"
+                    src="/AltheaLogoGreen.jpg"
                     alt="Althea Logo"
                     className="h-16 w-auto object-contain"
                   />

@@ -445,7 +445,7 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <img
-              src="/Althea-Logo-Green.jpg"
+              src="/AltheaLogoGreen.jpg"
               alt="Althea Logo"
               className="h-12 w-12 object-contain"
             />

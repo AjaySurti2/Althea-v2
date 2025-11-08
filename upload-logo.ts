@@ -10,7 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function uploadLogo() {
   try {
-    const logoPath = join(process.cwd(), 'public', 'Althea-Logo-Green.jpg');
+    const logoPath = join(process.cwd(), 'public', 'AltheaLogoGreen.jpg');
     const fileBuffer = readFileSync(logoPath);
 
     console.log('Uploading logo to Supabase Storage...');

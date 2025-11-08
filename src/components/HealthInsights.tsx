@@ -581,7 +581,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       }`}>
         <div className="flex items-center space-x-4">
           <img
-            src="/Althea-Logo-Green.jpg"
+            src="/AltheaLogoGreen.jpg"
             alt="Althea Logo"
             className="h-16 w-16 object-contain"
           />
