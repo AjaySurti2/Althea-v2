@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Brain, AlertTriangle, CheckCircle, ArrowRight, ArrowLeft,
   TrendingUp, Users, Calendar, Download, MessageCircle, Activity,
-  Lightbulb, RefreshCw
+  Lightbulb, RefreshCw, X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -243,6 +243,391 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
     } finally {
       setGeneratingReport(false);
     }
+  };
+
+  // NEW FUNCTION: Download Health Insights Report as HTML
+  const handleDownloadReport = async () => {
+    try {
+      setGeneratingReport(true);
+      setError(null);
+
+      console.log('=== Download Report Button Clicked ===');
+
+      // Fetch existing health insights data from database
+      const { data: healthInsightsData, error: fetchError } = await supabase
+        .from('health_insights')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchError) {
+        throw new Error('Failed to fetch health insights: ' + fetchError.message);
+      }
+
+      if (!healthInsightsData) {
+        throw new Error('No health insights found for this session. Please refresh the page.');
+      }
+
+      console.log('✓ Health Insights data fetched successfully');
+      console.log('Generating HTML report...');
+
+      // Generate HTML report
+      const reportHtml = generateHealthReportHTML(healthInsightsData);
+
+      // Create blob and download
+      const blob = new Blob([reportHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Althea-Health-Report-${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log('✓ Report downloaded successfully');
+
+    } catch (err: any) {
+      console.error('✗ Error downloading report:', err);
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  // Generate HTML report with styling and logo
+  const generateHealthReportHTML = (data: any): string => {
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Althea Health Insights Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f9fafb;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #10b981;
+    }
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .logo {
+      font-size: 32px;
+      font-weight: bold;
+      color: #10b981;
+    }
+    .logo-image {
+      height: 60px;
+      width: auto;
+    }
+    .subtitle {
+      font-size: 14px;
+      font-style: italic;
+      color: #059669;
+      margin-top: 5px;
+    }
+    .date-section {
+      text-align: right;
+      color: #6b7280;
+      font-size: 14px;
+    }
+    h1 {
+      color: #10b981;
+      font-size: 28px;
+      margin: 30px 0 15px;
+    }
+    h2 {
+      color: #059669;
+      font-size: 22px;
+      margin: 25px 0 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #d1fae5;
+    }
+    h3 {
+      color: #047857;
+      font-size: 18px;
+      margin: 20px 0 10px;
+    }
+    .section {
+      margin: 25px 0;
+      padding: 20px;
+      background: #f0fdf4;
+      border-left: 4px solid #10b981;
+      border-radius: 8px;
+    }
+    .greeting-section {
+      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 25px;
+    }
+    .executive-summary {
+      background: white;
+      padding: 20px;
+      border: 2px solid #10b981;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      background: white;
+    }
+    th {
+      background: #10b981;
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    tr:hover {
+      background: #f9fafb;
+    }
+    .question-list {
+      list-style: none;
+      padding: 0;
+    }
+    .question-item {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border-left: 4px solid #10b981;
+      display: flex;
+      gap: 15px;
+    }
+    .question-number {
+      background: #10b981;
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .metadata-item {
+      background: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+    }
+    .metadata-label {
+      font-weight: 600;
+      color: #6b7280;
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .metadata-value {
+      color: #111827;
+      font-size: 16px;
+    }
+    .disclaimer {
+      background: #fef3c7;
+      border: 2px solid #f59e0b;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 30px;
+      color: #92400e;
+    }
+    .disclaimer strong {
+      color: #b45309;
+    }
+    .next-steps {
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .icon {
+      display: inline-block;
+      margin-right: 8px;
+      color: #10b981;
+    }
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header with Logo -->
+    <div class="header">
+      <div class="logo-section">
+        <div>
+          <div class="logo">Althea AI</div>
+          <div class="subtitle">Your Health Insights Report</div>
+        </div>
+      </div>
+      <div class="date-section">
+        <div><strong>Report Date</strong></div>
+        <div>${currentDate}</div>
+      </div>
+    </div>
+
+    <!-- Greeting Section -->
+    ${data.greeting ? `
+    <div class="greeting-section">
+      <h2>👋 Welcome</h2>
+      <p>${data.greeting}</p>
+    </div>
+    ` : ''}
+
+    <!-- Executive Summary -->
+    ${data.executive_summary ? `
+    <div class="executive-summary">
+      <h2>📊 Executive Summary</h2>
+      <p>${data.executive_summary}</p>
+    </div>
+    ` : ''}
+
+    <!-- Detailed Findings -->
+    ${data.detailed_findings && Array.isArray(data.detailed_findings) && data.detailed_findings.length > 0 ? `
+    <div class="section">
+      <h2>🔍 Detailed Findings</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Finding</th>
+            <th>Significance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.detailed_findings.map((finding: any) => `
+          <tr>
+            <td><strong>${finding.category || 'N/A'}</strong></td>
+            <td>${finding.finding || 'N/A'}</td>
+            <td>${finding.significance || 'N/A'}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+    <!-- Trend Analysis -->
+    ${data.trend_analysis ? `
+    <div class="section">
+      <h2>📈 Trend Analysis</h2>
+      <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 6px; overflow-x: auto;">${JSON.stringify(data.trend_analysis, null, 2)}</pre>
+    </div>
+    ` : ''}
+
+    <!-- Questions for Doctor -->
+    ${data.doctor_questions && data.doctor_questions.length > 0 ? `
+    <div class="section">
+      <h2>💬 Questions for Your Doctor</h2>
+      <ul class="question-list">
+        ${data.doctor_questions.map((question: string, idx: number) => `
+        <li class="question-item">
+          <div class="question-number">${idx + 1}</div>
+          <div>${question}</div>
+        </li>
+        `).join('')}
+      </ul>
+    </div>
+    ` : ''}
+
+    <!-- Next Steps -->
+    ${data.next_steps ? `
+    <div class="next-steps">
+      <h2>💡 Next Steps</h2>
+      <p>${data.next_steps}</p>
+    </div>
+    ` : ''}
+
+    <!-- Metadata -->
+    <div class="section">
+      <h3>Report Information</h3>
+      <div class="metadata-grid">
+        <div class="metadata-item">
+          <div class="metadata-label">Session ID</div>
+          <div class="metadata-value">${data.session_id || 'N/A'}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="metadata-label">Tone</div>
+          <div class="metadata-value">${data.tone || 'Friendly'}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="metadata-label">Language Level</div>
+          <div class="metadata-value">${data.language_level || 'Simple'}</div>
+        </div>
+        <div class="metadata-item">
+          <div class="metadata-label">Generated</div>
+          <div class="metadata-value">${new Date(data.created_at).toLocaleString()}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      <strong>⚠️ Important Disclaimer:</strong> ${data.disclaimer || 'These insights are for informational purposes only and do not constitute medical advice. Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.'}
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; color: #6b7280; font-size: 14px;">
+      <p>Generated by <strong style="color: #10b981;">Althea AI</strong></p>
+      <p>© ${new Date().getFullYear()} Althea Health Analytics. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`;
   };
 
   const handleGenerateReport = async () => {
@@ -975,7 +1360,9 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
             className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
               generatingReport
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
+                : darkMode
+                  ? 'bg-gray-700 text-white hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
             }`}
             title="View your Health Insights Report data in table format"
           >
@@ -988,6 +1375,30 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               <>
                 <Activity className="w-5 h-5" />
                 <span>View Report Data</span>
+              </>
+            )}
+          </button>
+
+          {/* Download Report Button - Downloads HTML report */}
+          <button
+            onClick={handleDownloadReport}
+            disabled={generatingReport}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+              generatingReport
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+            title="Download your Health Insights Report as HTML"
+          >
+            {generatingReport ? (
+              <>
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                <span>Preparing...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                <span>Download Report</span>
               </>
             )}
           </button>
