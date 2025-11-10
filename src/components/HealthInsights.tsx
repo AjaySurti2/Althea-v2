@@ -59,6 +59,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportStoragePath, setReportStoragePath] = useState<string | null>(null);
   const [reportCached, setReportCached] = useState(false);
+  const [showDataTable, setShowDataTable] = useState(false);
+  const [tableData, setTableData] = useState<any>(null);
 
   useEffect(() => {
     loadInsights();
@@ -204,6 +206,45 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   // This function is no longer called to prevent CORS and unnecessary API calls
 
   // Handle report download - generates on-demand only when user clicks
+  // NEW FUNCTION: Display Health Insights Data in Table Format
+  const handleViewHealthInsightsTable = async () => {
+    try {
+      setGeneratingReport(true);
+      setError(null);
+
+      console.log('=== View Health Insights Table Clicked ===');
+
+      // Fetch existing health insights data from database
+      const { data: healthInsightsData, error: fetchError } = await supabase
+        .from('health_insights')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchError) {
+        throw new Error('Failed to fetch health insights: ' + fetchError.message);
+      }
+
+      if (!healthInsightsData) {
+        throw new Error('No health insights found for this session. Please refresh the page.');
+      }
+
+      console.log('✓ Health Insights data fetched successfully');
+
+      // Set the table data and show the table modal
+      setTableData(healthInsightsData);
+      setShowDataTable(true);
+
+    } catch (err: any) {
+      console.error('✗ Error fetching health insights data:', err);
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
   const handleGenerateReport = async () => {
     try {
       setGeneratingReport(true);
@@ -927,26 +968,26 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         </button>
 
         <div className="flex items-center space-x-3">
-          {/* Unified Download Button - Uses cached report generated in background */}
+          {/* View Health Insights Data Button - Displays existing data in table */}
           <button
-            onClick={handleGenerateReport}
+            onClick={handleViewHealthInsightsTable}
             disabled={generatingReport}
             className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
               generatingReport
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-green-600 text-white hover:bg-green-700'
             }`}
-            title={reportCached ? "Download your comprehensive health report" : "Generating your report..."}
+            title="View your Health Insights Report data in table format"
           >
             {generatingReport ? (
               <>
                 <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                <span>Preparing...</span>
+                <span>Loading...</span>
               </>
             ) : (
               <>
-                <Download className="w-5 h-5" />
-                <span>Download Report</span>
+                <Activity className="w-5 h-5" />
+                <span>View Report Data</span>
               </>
             )}
           </button>
@@ -960,6 +1001,268 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Health Insights Data Table Modal */}
+      {showDataTable && tableData && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className={`max-w-6xl w-full max-h-[90vh] overflow-auto rounded-xl ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          } shadow-2xl`}>
+            {/* Modal Header */}
+            <div className={`sticky top-0 z-10 flex items-center justify-between p-6 border-b ${
+              darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+            }`}>
+              <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Health Insights Report Data
+              </h2>
+              <button
+                onClick={() => setShowDataTable(false)}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                }`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {/* Executive Summary Section */}
+              {tableData.executive_summary && (
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
+                    darkMode ? 'text-green-400' : 'text-green-700'
+                  }`}>
+                    <Brain className="w-5 h-5 mr-2" />
+                    Executive Summary
+                  </h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-gray-700/50' : 'bg-green-50'
+                  }`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {tableData.executive_summary}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Greeting Section */}
+              {tableData.greeting && (
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 ${
+                    darkMode ? 'text-green-400' : 'text-green-700'
+                  }`}>
+                    Greeting
+                  </h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+                  }`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {tableData.greeting}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Findings Table */}
+              {tableData.detailed_findings && (
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
+                    darkMode ? 'text-green-400' : 'text-green-700'
+                  }`}>
+                    <AlertTriangle className="w-5 h-5 mr-2" />
+                    Detailed Findings
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className={`w-full border-collapse ${
+                      darkMode ? 'border-gray-700' : 'border-gray-200'
+                    }`}>
+                      <thead>
+                        <tr className={darkMode ? 'bg-gray-700' : 'bg-green-100'}>
+                          <th className={`p-3 text-left text-sm font-semibold ${
+                            darkMode ? 'text-gray-200' : 'text-gray-700'
+                          }`}>
+                            Category
+                          </th>
+                          <th className={`p-3 text-left text-sm font-semibold ${
+                            darkMode ? 'text-gray-200' : 'text-gray-700'
+                          }`}>
+                            Finding
+                          </th>
+                          <th className={`p-3 text-left text-sm font-semibold ${
+                            darkMode ? 'text-gray-200' : 'text-gray-700'
+                          }`}>
+                            Significance
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.isArray(tableData.detailed_findings) && tableData.detailed_findings.map((finding: any, idx: number) => (
+                          <tr key={idx} className={`border-t ${
+                            darkMode ? 'border-gray-700' : 'border-gray-200'
+                          }`}>
+                            <td className={`p-3 text-sm font-medium ${
+                              darkMode ? 'text-gray-300' : 'text-gray-900'
+                            }`}>
+                              {finding.category || 'N/A'}
+                            </td>
+                            <td className={`p-3 text-sm ${
+                              darkMode ? 'text-gray-400' : 'text-gray-700'
+                            }`}>
+                              {finding.finding || 'N/A'}
+                            </td>
+                            <td className={`p-3 text-sm ${
+                              darkMode ? 'text-gray-400' : 'text-gray-700'
+                            }`}>
+                              {finding.significance || 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Trend Analysis Table */}
+              {tableData.trend_analysis && (
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
+                    darkMode ? 'text-green-400' : 'text-green-700'
+                  }`}>
+                    <TrendingUp className="w-5 h-5 mr-2" />
+                    Trend Analysis
+                  </h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+                  }`}>
+                    <pre className={`text-sm whitespace-pre-wrap ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {JSON.stringify(tableData.trend_analysis, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Questions for Doctor */}
+              {tableData.doctor_questions && tableData.doctor_questions.length > 0 && (
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
+                    darkMode ? 'text-green-400' : 'text-green-700'
+                  }`}>
+                    <MessageCircle className="w-5 h-5 mr-2" />
+                    Questions for Your Doctor
+                  </h3>
+                  <div className="space-y-2">
+                    {tableData.doctor_questions.map((question: string, idx: number) => (
+                      <div key={idx} className={`p-3 rounded-lg flex items-start ${
+                        darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+                      }`}>
+                        <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
+                          darkMode ? 'bg-green-600 text-white' : 'bg-green-500 text-white'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          {question}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Next Steps */}
+              {tableData.next_steps && (
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
+                    darkMode ? 'text-green-400' : 'text-green-700'
+                  }`}>
+                    <Lightbulb className="w-5 h-5 mr-2" />
+                    Next Steps
+                  </h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-gray-700/50' : 'bg-blue-50'
+                  }`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {tableData.next_steps}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata Information */}
+              <div className={`mt-6 p-4 rounded-lg border ${
+                darkMode ? 'bg-gray-700/30 border-gray-700' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <h3 className={`text-sm font-semibold mb-2 ${
+                  darkMode ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Report Metadata
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Session ID:
+                    </span>
+                    <span className={`ml-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {tableData.session_id}
+                    </span>
+                  </div>
+                  <div>
+                    <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Tone:
+                    </span>
+                    <span className={`ml-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {tableData.tone || 'friendly'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Language Level:
+                    </span>
+                    <span className={`ml-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {tableData.language_level || 'simple'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Created:
+                    </span>
+                    <span className={`ml-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {new Date(tableData.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Disclaimer */}
+              {tableData.disclaimer && (
+                <div className={`mt-6 p-4 rounded-lg ${
+                  darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'
+                }`}>
+                  <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-800'}`}>
+                    <strong>Disclaimer:</strong> {tableData.disclaimer}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className={`sticky bottom-0 flex justify-end p-6 border-t ${
+              darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+            }`}>
+              <button
+                onClick={() => setShowDataTable(false)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
