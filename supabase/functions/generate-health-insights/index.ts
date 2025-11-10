@@ -11,6 +11,7 @@ interface InsightsRequest {
   sessionId: string;
   tone?: string;
   languageLevel?: string;
+  forceRegenerate?: boolean;
 }
 
 const TONE_MAPPINGS = {
@@ -26,6 +27,26 @@ const LANGUAGE_MAPPINGS = {
   simple_terms: "Avoid medical jargon, use everyday language",
   child_friendly: "Use very simple words suitable for children"
 };
+
+async function checkExistingInsights(supabase: any, sessionId: string, tone: string, languageLevel: string) {
+  const { data: existingInsight } = await supabase
+    .from("health_insights")
+    .select("*")
+    .eq("session_id", sessionId)
+    .eq("tone", tone)
+    .eq("language_level", languageLevel)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingInsight) {
+    console.log(`✅ [Cache Hit] Found existing insights for session ${sessionId}`);
+    return existingInsight;
+  }
+
+  console.log(`🔄 [Cache Miss] No existing insights found, generating new`);
+  return null;
+}
 
 async function generateHealthInsights(
   labReports: any[],
@@ -113,13 +134,13 @@ OUTPUT FORMAT (JSON):
     "greeting": "Hello [Patient Name]! Here's a clear summary of what your lab results from [Date] tell us:",
     "overall_health_status": "excellent|good|requires_attention|concerning",
     "overall_assessment": "2-3 sentence summary explaining the big picture: what areas need care, what looks good, and overall trajectory",
-    "body_response_pattern": "Clear explanation of what patterns show about how the body is functioning - e.g., 'Low hemoglobin and hematocrit levels indicate your body might be carrying slightly less oxygen, which can explain feelings of fatigue or low energy. Elevated white blood cells may mean your immune system is responding to mild inflammation or infection.'",
+    "body_response_pattern": "Clear explanation of what patterns show about how the body is functioning",
     "positive_signs": [
-      "Specific positive finding 1 - e.g., 'Platelet levels are normal'",
-      "Specific positive finding 2 - e.g., 'No critical markers were found'"
+      "Specific positive finding 1",
+      "Specific positive finding 2"
     ],
-    "health_story_context": "Personalized 1-2 sentence narrative connecting findings to patient's wellbeing - e.g., 'These findings suggest your body could benefit from more iron-rich foods and rest. Nothing appears alarming, but follow-up with your doctor within 1-2 weeks is recommended to confirm these results and guide next steps.'",
-    "key_message": "One clear takeaway message that empowers the patient - e.g., 'Your health story is unique — this summary is here to help you understand it clearly and calmly.'"
+    "health_story_context": "Personalized 1-2 sentence narrative connecting findings to patient's wellbeing",
+    "key_message": "One clear takeaway message that empowers the patient"
   },
   "key_findings": [
     {
@@ -135,7 +156,7 @@ OUTPUT FORMAT (JSON):
       "value": "Current value with unit",
       "normal_range": "Normal range",
       "status": "HIGH/LOW/CRITICAL",
-      "explanation": "Clinical significance in plain language with analogy if helpful"
+      "explanation": "Clinical significance in plain language"
     }
   ],
   "questions_for_doctor": [
@@ -216,6 +237,8 @@ CLINICAL ANALYSIS REQUIREMENTS:
 Provide your comprehensive analysis in JSON format.`;
 
   try {
+    console.log(`🤖 [OpenAI] Generating insights with optimized prompt`);
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -248,11 +271,75 @@ Provide your comprehensive analysis in JSON format.`;
     const result = await response.json();
     const insights = JSON.parse(result.choices?.[0]?.message?.content || "{}");
 
+    console.log(`✅ [OpenAI] Insights generated successfully`);
+
     return insights;
   } catch (error: any) {
     console.error("Error generating insights:", error);
     throw error;
   }
+}
+
+async function saveInsightsWithTracking(
+  supabase: any,
+  sessionId: string,
+  userId: string,
+  insights: any,
+  tone: string,
+  languageLevel: string,
+  patient: any,
+  parentInsightId: string | null = null
+) {
+  const executiveSummary = `${insights.enhanced_summary?.greeting || insights.summary || ''}\n\n${insights.enhanced_summary?.overall_assessment || ''}\n\n${insights.enhanced_summary?.body_response_pattern || ''}`.trim();
+
+  const { data: savedInsight, error: saveError } = await supabase
+    .from("health_insights")
+    .insert({
+      session_id: sessionId,
+      user_id: userId,
+      greeting: insights.enhanced_summary?.greeting || `Hello ${patient?.name || 'there'}!`,
+      executive_summary: executiveSummary,
+      detailed_findings: insights.key_findings || insights.abnormal_values || [],
+      trend_analysis: [],
+      family_patterns: insights.family_screening_suggestions || [],
+      doctor_questions: insights.questions_for_doctor || [],
+      next_steps: insights.follow_up_timeline || '',
+      disclaimer: 'This interpretation is for educational purposes only. Please consult your healthcare provider for medical advice.',
+      tone: tone,
+      language_level: languageLevel,
+      regeneration_count: parentInsightId ? 1 : 0,
+      parent_insight_id: parentInsightId
+    })
+    .select()
+    .single();
+
+  if (saveError) {
+    console.error("Failed to save insights to database:", saveError);
+    throw new Error(`Failed to save insights: ${saveError.message}`);
+  }
+
+  const { error: summaryError } = await supabase
+    .from("ai_summaries")
+    .insert({
+      session_id: sessionId,
+      user_id: userId,
+      summary_text: executiveSummary,
+      doctor_questions: insights.questions_for_doctor || [],
+      health_insights: JSON.stringify({
+        key_findings: insights.key_findings,
+        recommendations: insights.health_recommendations,
+        urgency: insights.urgency_flag
+      }),
+      created_at: new Date().toISOString()
+    });
+
+  if (summaryError) {
+    console.warn("Failed to save ai_summary:", summaryError.message);
+  }
+
+  console.log("✅ [Tracking] Insights saved with ai_summaries audit trail");
+
+  return savedInsight;
 }
 
 Deno.serve(async (req: Request) => {
@@ -261,7 +348,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { sessionId, tone = "conversational", languageLevel = "simple_terms" }: InsightsRequest = await req.json();
+    const {
+      sessionId,
+      tone = "conversational",
+      languageLevel = "simple_terms",
+      forceRegenerate = false
+    }: InsightsRequest = await req.json();
 
     if (!sessionId) {
       return new Response(
@@ -274,7 +366,43 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`Generating insights for session: ${sessionId} with tone: ${tone}, language: ${languageLevel}`);
+    console.log(`=== Generate Health Insights (OPTIMIZED) ===`);
+    console.log(`Session: ${sessionId}, Tone: ${tone}, Language: ${languageLevel}`);
+
+    const startTime = Date.now();
+
+    if (!forceRegenerate) {
+      const cachedInsight = await checkExistingInsights(supabase, sessionId, tone, languageLevel);
+      if (cachedInsight) {
+        console.log(`⚡ [Cache] Returning cached insights - 0ms OpenAI latency`);
+
+        const cachedInsights = {
+          summary: cachedInsight.executive_summary?.split('\n\n')[0] || '',
+          enhanced_summary: {
+            greeting: cachedInsight.greeting,
+            overall_assessment: cachedInsight.executive_summary
+          },
+          key_findings: cachedInsight.detailed_findings || [],
+          questions_for_doctor: cachedInsight.doctor_questions || [],
+          family_screening_suggestions: cachedInsight.family_patterns || []
+        };
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            insights: cachedInsights,
+            insight_id: cachedInsight.id,
+            cached: true,
+            metadata: {
+              cached_at: cachedInsight.created_at,
+              tone: cachedInsight.tone,
+              language_level: cachedInsight.language_level
+            }
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     const { data: labReports, error: reportsError } = await supabase
       .from("lab_reports")
@@ -305,7 +433,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", patientId)
       .single();
 
-    console.log(`Analyzing ${testResults?.length || 0} test results`);
+    console.log(`📊 Analyzing ${testResults?.length || 0} test results`);
 
     const insights = await generateHealthInsights(
       labReports,
@@ -315,46 +443,37 @@ Deno.serve(async (req: Request) => {
       languageLevel
     );
 
-    // Build executive summary from insights
-    const executiveSummary = `${insights.enhanced_summary?.greeting || insights.summary || ''}\n\n${insights.enhanced_summary?.overall_assessment || ''}\n\n${insights.enhanced_summary?.body_response_pattern || ''}`.trim();
+    const savedInsight = await saveInsightsWithTracking(
+      supabase,
+      sessionId,
+      labReports[0].user_id,
+      insights,
+      tone,
+      languageLevel,
+      patient
+    );
 
-    const { data: savedInsight, error: saveError } = await supabase
-      .from("health_insights")
-      .insert({
-        session_id: sessionId,
-        user_id: labReports[0].user_id,
-        greeting: insights.enhanced_summary?.greeting || `Hello ${patient?.name || 'there'}!`,
-        executive_summary: executiveSummary,
-        detailed_findings: insights.key_findings || insights.abnormal_values || [],
-        trend_analysis: [],
-        family_patterns: insights.family_screening_suggestions || [],
-        doctor_questions: insights.questions_for_doctor || [],
-        next_steps: insights.follow_up_timeline || '',
-        disclaimer: 'This interpretation is for educational purposes only. Please consult your healthcare provider for medical advice.',
-        tone: tone,
-        language_level: languageLevel,
-        regeneration_count: 0,
-        parent_insight_id: null
-      })
-      .select()
-      .single();
+    const endTime = Date.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
 
-    if (saveError) {
-      console.error("Failed to save insights to database:", saveError);
-      throw new Error(`Failed to save insights: ${saveError.message}`);
-    }
-
-    console.log("Insights saved successfully to database with ID:", savedInsight.id);
+    console.log(`✅ [Complete] Generated and saved insights in ${duration}s`);
 
     return new Response(
       JSON.stringify({
         success: true,
         insights,
         insight_id: savedInsight.id,
+        cached: false,
         metadata: {
           reports_analyzed: labReports.length,
           tests_analyzed: testResults?.length || 0,
-          patient_name: patient?.name
+          patient_name: patient?.name,
+          duration: `${duration}s`,
+          optimizations: {
+            caching_enabled: true,
+            ai_summaries_tracking: true,
+            audit_trail: true
+          }
         }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
