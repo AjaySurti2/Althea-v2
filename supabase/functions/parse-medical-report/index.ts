@@ -376,7 +376,8 @@ async function processFilesConcurrently(
           fileId,
           fileName: "Unknown",
           status: 'error',
-          error: fileError.message
+          error: fileError.message,
+          reason: fileError.message
         };
       }
     });
