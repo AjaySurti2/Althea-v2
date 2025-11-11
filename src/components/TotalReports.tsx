@@ -459,8 +459,14 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <div className="animate-spin w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full" />
+      <div className="flex flex-col items-center justify-center p-12 space-y-4">
+        <div className="relative">
+          <div className="animate-spin w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full" />
+          <div className="absolute inset-0 animate-ping w-12 h-12 border-4 border-green-300 border-t-transparent rounded-full opacity-20" />
+        </div>
+        <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          Loading your health reports...
+        </p>
       </div>
     );
   }
@@ -544,10 +550,10 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
           {filteredSessions.map((session) => (
             <div
               key={session.id}
-              className={`rounded-xl border overflow-hidden transition-all ${
+              className={`rounded-xl border overflow-hidden transition-all hover:shadow-xl ${
                 darkMode
-                  ? 'bg-gray-800 border-gray-700'
-                  : 'bg-white border-gray-200'
+                  ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                  : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-lg'
               }`}
             >
               {/* Session Header */}
@@ -967,137 +973,112 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                     </div>
                   )}
 
-                  {/* Generated Reports Section */}
-                  {session.generatedReports && session.generatedReports.length > 0 && (
+                  {/* Health Insights Reports Section - Smart Display Logic */}
+                  {session.parsedReports && session.parsedReports.length > 0 && (
                     <div className={`px-4 py-3 border-t ${
                       darkMode ? 'border-gray-700' : 'border-gray-200'
                     }`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className={`text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
-                          Health Insights Reports ({session.generatedReports.length})
-                        </h4>
-                      </div>
-                      <div className="space-y-3">
-                        {session.generatedReports.map((report: GeneratedReport) => (
-                          <div
-                            key={report.id}
-                            className={`rounded-lg border p-4 ${
-                              darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2 mb-2">
-                                  <FileText className="w-5 h-5 text-green-600" />
-                                  <span className={`font-medium ${
-                                    darkMode ? 'text-white' : 'text-gray-900'
+                      <h4 className={`text-sm font-semibold mb-3 ${
+                        darkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Health Insights Report
+                      </h4>
+
+                      {/* Show View/Download buttons ONLY if reports exist */}
+                      {session.generatedReports && session.generatedReports.length > 0 ? (
+                        <div className="space-y-3">
+                          {session.generatedReports.map((report: GeneratedReport) => (
+                            <div
+                              key={report.id}
+                              className={`rounded-lg border p-4 ${
+                                darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <FileText className="w-5 h-5 text-green-600" />
+                                    <span className={`font-medium ${
+                                      darkMode ? 'text-white' : 'text-gray-900'
+                                    }`}>
+                                      {report.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Report
+                                    </span>
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                                    }`}>
+                                      v{report.report_version}
+                                    </span>
+                                  </div>
+                                  <div className={`flex items-center space-x-3 text-xs ${
+                                    darkMode ? 'text-gray-400' : 'text-gray-600'
                                   }`}>
-                                    {report.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Report
-                                  </span>
-                                  <span className={`text-xs px-2 py-1 rounded-full ${
-                                    darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                                  }`}>
-                                    v{report.report_version}
-                                  </span>
+                                    <span className="flex items-center">
+                                      <Clock className="w-3 h-3 mr-1" />
+                                      {new Date(report.generated_at).toLocaleDateString()}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{(report.file_size / 1024).toFixed(1)} KB</span>
+                                    <span>•</span>
+                                    <span className="flex items-center text-green-600 dark:text-green-400">
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Complete
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className={`flex items-center space-x-3 text-xs ${
-                                  darkMode ? 'text-gray-400' : 'text-gray-600'
-                                }`}>
-                                  <span className="flex items-center">
-                                    <Clock className="w-3 h-3 mr-1" />
-                                    {new Date(report.generated_at).toLocaleDateString()}
-                                  </span>
-                                  <span>•</span>
-                                  <span>{(report.file_size / 1024).toFixed(1)} KB</span>
-                                  <span>•</span>
-                                  <span className="flex items-center text-green-600 dark:text-green-400">
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                    Complete
-                                  </span>
+                                <div className="flex items-center space-x-2 ml-4">
+                                  <button
+                                    onClick={() => handleViewGeneratedReport(report)}
+                                    className={`flex items-center space-x-1 px-3 py-2 rounded-lg font-medium transition-all ${
+                                      darkMode
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                    }`}
+                                    title="View Report Data"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    <span className="hidden sm:inline">View</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadGeneratedReport(report)}
+                                    className={`flex items-center space-x-1 px-3 py-2 rounded-lg font-medium transition-all ${
+                                      darkMode
+                                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                                        : 'bg-green-500 hover:bg-green-600 text-white'
+                                    }`}
+                                    title="Download Report"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Download</span>
+                                  </button>
                                 </div>
-                              </div>
-                              <div className="flex items-center space-x-2 ml-4">
-                                <button
-                                  onClick={() => handleViewGeneratedReport(report)}
-                                  className={`p-2 rounded-lg transition-colors ${
-                                    darkMode
-                                      ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                                  }`}
-                                  title="Preview Report"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDownloadGeneratedReport(report)}
-                                  className={`p-2 rounded-lg transition-colors ${
-                                    darkMode
-                                      ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                                  }`}
-                                  title="Download Report"
-                                >
-                                  <Download className="w-4 h-4" />
-                                </button>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                      {session.parsedReports && session.parsedReports.length > 0 && !session.generatedReports.find((r: any) => r.session_id === session.id) && (
+                          ))}
+                        </div>
+                      ) : (
+                        /* Show Generate button ONLY if no reports exist */
                         <button
                           onClick={() => handleGenerateReport(session.id)}
                           disabled={generatingReport === session.id}
-                          className={`mt-3 w-full py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
+                          className={`w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
                             generatingReport === session.id
                               ? 'bg-gray-400 cursor-not-allowed'
-                              : 'bg-green-600 hover:bg-green-700 text-white'
+                              : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md hover:shadow-lg'
                           }`}
                         >
                           {generatingReport === session.id ? (
                             <>
-                              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                              <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
                               <span>Generating Report...</span>
                             </>
                           ) : (
                             <>
-                              <FileText className="w-4 h-4" />
-                              <span>Generate Comprehensive Report</span>
+                              <FileText className="w-5 h-5" />
+                              <span>Generate Health Insights Report</span>
                             </>
                           )}
                         </button>
                       )}
-                    </div>
-                  )}
-
-                  {/* Generate Report Button for sessions without generated reports */}
-                  {session.parsedReports && session.parsedReports.length > 0 && (!session.generatedReports || session.generatedReports.length === 0) && (
-                    <div className={`px-4 py-3 border-t ${
-                      darkMode ? 'border-gray-700' : 'border-gray-200'
-                    }`}>
-                      <button
-                        onClick={() => handleGenerateReport(session.id)}
-                        disabled={generatingReport === session.id}
-                        className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
-                          generatingReport === session.id
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-700 text-white'
-                        }`}
-                      >
-                        {generatingReport === session.id ? (
-                          <>
-                            <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                            <span>Generating Report...</span>
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="w-5 h-5" />
-                            <span>Generate Health Insights Report</span>
-                          </>
-                        )}
-                      </button>
                     </div>
                   )}
                 </div>

@@ -78,78 +78,168 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6 mb-8">
-          <div className={`p-6 rounded-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+        <div className="grid lg:grid-cols-4 gap-4 mb-8">
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
+              activeTab === 'reports'
+                ? darkMode
+                  ? 'bg-green-600 ring-2 ring-green-400'
+                  : 'bg-green-500 ring-2 ring-green-300'
+                : darkMode
+                ? 'bg-gray-800 hover:bg-gray-750'
+                : 'bg-white hover:bg-gray-50'
+            }`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <span className={`text-sm font-medium ${
+                activeTab === 'reports'
+                  ? 'text-white'
+                  : darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
                 Total Reports
               </span>
-              <FileText className="w-5 h-5 text-green-500" />
+              <FileText className={`w-5 h-5 ${
+                activeTab === 'reports' ? 'text-white' : 'text-green-500'
+              }`} />
             </div>
-            <div className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            <div className={`text-3xl font-bold ${
+              activeTab === 'reports'
+                ? 'text-white'
+                : darkMode ? 'text-white' : 'text-gray-900'
+            }`}>
               {sessions.length}
             </div>
-          </div>
+          </button>
 
-          <div className={`p-6 rounded-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
+              activeTab === 'history'
+                ? darkMode
+                  ? 'bg-blue-600 ring-2 ring-blue-400'
+                  : 'bg-blue-500 ring-2 ring-blue-300'
+                : darkMode
+                ? 'bg-gray-800 hover:bg-gray-750'
+                : 'bg-white hover:bg-gray-50'
+            }`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <span className={`text-sm font-medium ${
+                activeTab === 'history'
+                  ? 'text-white'
+                  : darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
                 Health Metrics
               </span>
-              <TrendingUp className="w-5 h-5 text-blue-500" />
+              <TrendingUp className={`w-5 h-5 ${
+                activeTab === 'history' ? 'text-white' : 'text-blue-500'
+              }`} />
             </div>
-            <div className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            <div className={`text-3xl font-bold ${
+              activeTab === 'history'
+                ? 'text-white'
+                : darkMode ? 'text-white' : 'text-gray-900'
+            }`}>
               {metrics.length}
             </div>
-          </div>
+          </button>
 
-          <div className={`p-6 rounded-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+          <button
+            onClick={() => setActiveTab('patterns')}
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
+              activeTab === 'patterns'
+                ? darkMode
+                  ? 'bg-purple-600 ring-2 ring-purple-400'
+                  : 'bg-purple-500 ring-2 ring-purple-300'
+                : darkMode
+                ? 'bg-gray-800 hover:bg-gray-750'
+                : 'bg-white hover:bg-gray-50'
+            }`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <span className={`text-sm font-medium ${
+                activeTab === 'patterns'
+                  ? 'text-white'
+                  : darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
                 Family Patterns
               </span>
-              <Users className="w-5 h-5 text-purple-500" />
+              <Users className={`w-5 h-5 ${
+                activeTab === 'patterns' ? 'text-white' : 'text-purple-500'
+              }`} />
             </div>
-            <div className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            <div className={`text-3xl font-bold ${
+              activeTab === 'patterns'
+                ? 'text-white'
+                : darkMode ? 'text-white' : 'text-gray-900'
+            }`}>
               {patterns.length}
             </div>
-          </div>
+          </button>
 
-          <div className={`p-6 rounded-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+          <button
+            onClick={() => setActiveTab('reminders')}
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
+              activeTab === 'reminders'
+                ? darkMode
+                  ? 'bg-orange-600 ring-2 ring-orange-400'
+                  : 'bg-orange-500 ring-2 ring-orange-300'
+                : darkMode
+                ? 'bg-gray-800 hover:bg-gray-750'
+                : 'bg-white hover:bg-gray-50'
+            }`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <span className={`text-sm font-medium ${
+                activeTab === 'reminders'
+                  ? 'text-white'
+                  : darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
                 Upcoming
               </span>
-              <Calendar className="w-5 h-5 text-orange-500" />
+              <Calendar className={`w-5 h-5 ${
+                activeTab === 'reminders' ? 'text-white' : 'text-orange-500'
+              }`} />
             </div>
-            <div className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            <div className={`text-3xl font-bold ${
+              activeTab === 'reminders'
+                ? 'text-white'
+                : darkMode ? 'text-white' : 'text-gray-900'
+            }`}>
               {reminders.length}
             </div>
-          </div>
+          </button>
         </div>
 
         <div className={`rounded-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg overflow-hidden`}>
-          <div className={`border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-            <div className="flex space-x-1 p-2">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-green-500 text-white shadow-lg'
-                        : darkMode
-                        ? 'text-gray-400 hover:bg-gray-700'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
+          <div className={`border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} bg-gradient-to-r ${
+            darkMode ? 'from-gray-800 to-gray-750' : 'from-gray-50 to-white'
+          }`}>
+            <div className="flex items-center justify-between px-4 py-3">
+              <h3 className={`text-lg font-semibold flex items-center space-x-2 ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                {activeTab === 'reports' && <><FileText className="w-5 h-5 text-green-500" /><span>Total Reports</span></>}
+                {activeTab === 'history' && <><TrendingUp className="w-5 h-5 text-blue-500" /><span>Health History</span></>}
+                {activeTab === 'patterns' && <><Users className="w-5 h-5 text-purple-500" /><span>Family Patterns</span></>}
+                {activeTab === 'reminders' && <><Calendar className="w-5 h-5 text-orange-500" /><span>Reminders</span></>}
+                {activeTab === 'settings' && <><Settings className="w-5 h-5 text-gray-500" /><span>Settings</span></>}
+              </h3>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  activeTab === 'settings'
+                    ? 'bg-gray-600 text-white shadow-lg'
+                    : darkMode
+                    ? 'text-gray-400 hover:bg-gray-700'
+                    : 'text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
             </div>
           </div>
 
