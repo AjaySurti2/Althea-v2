@@ -305,6 +305,31 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       day: 'numeric'
     });
 
+    // Categorize findings
+    const categorizeFindings = (findings: any[]) => {
+      const categories = {
+        lifestyle: [] as any[],
+        genetic: [] as any[],
+        risk: [] as any[]
+      };
+      
+      if (Array.isArray(findings)) {
+        findings.forEach(finding => {
+          const cat = (finding.category || '').toLowerCase();
+          if (cat.includes('lifestyle') || cat.includes('diet') || cat.includes('exercise')) {
+            categories.lifestyle.push(finding);
+          } else if (cat.includes('genetic') || cat.includes('hereditary') || cat.includes('family')) {
+            categories.genetic.push(finding);
+          } else {
+            categories.risk.push(finding);
+          }
+        });
+      }
+      return categories;
+    };
+
+    const categorized = categorizeFindings(data.detailed_findings || []);
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -312,11 +337,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Althea Health Insights Report</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       line-height: 1.6;
@@ -340,36 +361,9 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       padding-bottom: 20px;
       border-bottom: 3px solid #10b981;
     }
-    .logo-section {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    .logo {
-      font-size: 32px;
-      font-weight: bold;
-      color: #10b981;
-    }
-    .logo-image {
-      height: 60px;
-      width: auto;
-    }
-    .subtitle {
-      font-size: 14px;
-      font-style: italic;
-      color: #059669;
-      margin-top: 5px;
-    }
-    .date-section {
-      text-align: right;
-      color: #6b7280;
-      font-size: 14px;
-    }
-    h1 {
-      color: #10b981;
-      font-size: 28px;
-      margin: 30px 0 15px;
-    }
+    .logo { font-size: 32px; font-weight: bold; color: #10b981; }
+    .subtitle { font-size: 14px; font-style: italic; color: #059669; margin-top: 5px; }
+    .date-section { text-align: right; color: #6b7280; font-size: 14px; }
     h2 {
       color: #059669;
       font-size: 22px;
@@ -377,57 +371,74 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       padding-bottom: 10px;
       border-bottom: 2px solid #d1fae5;
     }
-    h3 {
-      color: #047857;
-      font-size: 18px;
-      margin: 20px 0 10px;
-    }
+    h3 { color: #047857; font-size: 18px; margin: 20px 0 10px; }
     .section {
       margin: 25px 0;
       padding: 20px;
-      background: #f0fdf4;
-      border-left: 4px solid #10b981;
-      border-radius: 8px;
-    }
-    .greeting-section {
-      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 25px;
-    }
-    .executive-summary {
       background: white;
-      padding: 20px;
-      border: 2px solid #10b981;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+    }
+    .urgency-box {
+      background: #fef2f2;
+      border: 2px solid #ef4444;
       border-radius: 8px;
-      margin: 20px 0;
+      padding: 15px;
+      margin-bottom: 20px;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-      background: white;
+    .urgency-box strong { color: #b91c1c; }
+    .enhanced-box {
+      padding: 16px;
+      margin: 12px 0;
+      border-radius: 8px;
+      border-left: 4px solid;
     }
-    th {
-      background: #10b981;
-      color: white;
-      padding: 12px;
-      text-align: left;
-      font-weight: 600;
+    .box-blue { background: #eff6ff; border-color: #3b82f6; }
+    .box-purple { background: #faf5ff; border-color: #a855f7; }
+    .box-green { background: #f0fdf4; border-color: #10b981; }
+    .box-teal { background: #f0fdfa; border-color: #14b8a6; }
+    .box-gray { background: #f9fafb; border-color: #6b7280; }
+    .box-orange { background: #fff7ed; border-color: #f97316; }
+    .box-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 16px;
     }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    tr:hover {
+    .title-blue { color: #1e40af; }
+    .title-purple { color: #7e22ce; }
+    .title-green { color: #047857; }
+    .title-teal { color: #0f766e; }
+    .title-orange { color: #c2410c; }
+    .finding-card {
       background: #f9fafb;
+      padding: 16px;
+      margin: 12px 0;
+      border-radius: 8px;
+      border-left: 3px solid;
     }
-    .question-list {
-      list-style: none;
-      padding: 0;
+    .finding-card p { margin: 8px 0; font-size: 14px; }
+    .finding-card strong { color: #374151; }
+    .abnormal-card {
+      background: #fffbeb;
+      border: 2px solid #fbbf24;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
     }
+    .abnormal-card h4 { color: #92400e; margin-bottom: 8px; }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+      margin: 4px 0;
+    }
+    .badge-high { background: #fecaca; color: #991b1b; }
+    .badge-medium { background: #fed7aa; color: #9a3412; }
+    .question-list { list-style: none; padding: 0; }
     .question-item {
-      background: white;
+      background: #f9fafb;
       padding: 15px;
       margin: 10px 0;
       border-radius: 8px;
@@ -447,28 +458,6 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       font-weight: bold;
       flex-shrink: 0;
     }
-    .metadata-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      margin: 20px 0;
-    }
-    .metadata-item {
-      background: #f9fafb;
-      padding: 12px;
-      border-radius: 6px;
-    }
-    .metadata-label {
-      font-weight: 600;
-      color: #6b7280;
-      font-size: 12px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .metadata-value {
-      color: #111827;
-      font-size: 16px;
-    }
     .disclaimer {
       background: #fef3c7;
       border: 2px solid #f59e0b;
@@ -477,42 +466,18 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       margin-top: 30px;
       color: #92400e;
     }
-    .disclaimer strong {
-      color: #b45309;
-    }
-    .next-steps {
-      background: #dbeafe;
-      border-left: 4px solid #3b82f6;
-      padding: 20px;
-      border-radius: 8px;
-      margin: 20px 0;
-    }
-    .icon {
-      display: inline-block;
-      margin-right: 8px;
-      color: #10b981;
-    }
     @media print {
-      body {
-        background: white;
-        padding: 0;
-      }
-      .container {
-        box-shadow: none;
-        padding: 20px;
-      }
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Header with Logo -->
     <div class="header">
-      <div class="logo-section">
-        <div>
-          <div class="logo">Althea AI</div>
-          <div class="subtitle">Your Health Insights Report</div>
-        </div>
+      <div>
+        <div class="logo">Althea AI</div>
+        <div class="subtitle">Your Health Insights Report</div>
       </div>
       <div class="date-section">
         <div><strong>Report Date</strong></div>
@@ -520,109 +485,96 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       </div>
     </div>
 
-    <!-- Greeting Section -->
-    ${data.greeting ? `
-    <div class="greeting-section">
-      <h2>👋 Welcome</h2>
-      <p>${data.greeting}</p>
+    ${data.urgency_flag && data.urgency_flag !== 'none' && data.urgency_flag !== 'routine' ? `
+    <div class="urgency-box">
+      <strong>⚠️ URGENCY FLAG: ${(data.urgency_flag || '').toUpperCase()}</strong>
+      <p style="margin-top:8px;">Some findings require timely medical attention. Please consult your healthcare provider promptly.</p>
     </div>
     ` : ''}
 
-    <!-- Executive Summary -->
-    ${data.executive_summary ? `
-    <div class="executive-summary">
-      <h2>📊 Executive Summary</h2>
-      <p>${data.executive_summary}</p>
-    </div>
-    ` : ''}
-
-    <!-- Detailed Findings -->
-    ${data.detailed_findings && Array.isArray(data.detailed_findings) && data.detailed_findings.length > 0 ? `
     <div class="section">
-      <h2>🔍 Detailed Findings</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Finding</th>
-            <th>Significance</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.detailed_findings.map((finding: any) => `
-          <tr>
-            <td><strong>${finding.category || 'N/A'}</strong></td>
-            <td>${finding.finding || 'N/A'}</td>
-            <td>${finding.significance || 'N/A'}</td>
-          </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <h2>1. Executive Summary</h2>
+      
+      ${data.greeting ? `
+      <div class="enhanced-box box-green">
+        <p style="font-size:16px; font-weight:500;">${data.greeting}</p>
+      </div>
+      ` : ''}
+      
+      ${data.executive_summary ? `
+      <div class="enhanced-box box-blue">
+        <div class="box-title title-blue">Overall Health Status</div>
+        <p>${data.executive_summary}</p>
+      </div>
+      ` : ''}
     </div>
-    ` : ''}
 
-    <!-- Trend Analysis -->
-    ${data.trend_analysis ? `
+    ${(categorized.lifestyle.length > 0 || categorized.genetic.length > 0 || categorized.risk.length > 0) ? `
     <div class="section">
-      <h2>📈 Trend Analysis</h2>
-      <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 6px; overflow-x: auto;">${JSON.stringify(data.trend_analysis, null, 2)}</pre>
+      <h2>2. Key Findings by Category</h2>
+      
+      ${categorized.lifestyle.length > 0 ? `
+      <h3 class="title-green">Lifestyle Factors</h3>
+      ${categorized.lifestyle.map(f => `
+        <div class="finding-card" style="border-color:#10b981;">
+          <p><strong>Finding:</strong> ${f.finding || 'N/A'}</p>
+          <p><strong>Significance:</strong> ${f.significance || 'N/A'}</p>
+          <p><strong>Action:</strong> ${f.action_needed || 'N/A'}</p>
+        </div>
+      `).join('')}
+      ` : ''}
+      
+      ${categorized.genetic.length > 0 ? `
+      <h3 class="title-blue" style="margin-top:20px;">Genetic & Hereditary Factors</h3>
+      ${categorized.genetic.map(f => `
+        <div class="finding-card" style="border-color:#3b82f6;">
+          <p><strong>Finding:</strong> ${f.finding || 'N/A'}</p>
+          <p><strong>Significance:</strong> ${f.significance || 'N/A'}</p>
+          <p><strong>Action:</strong> ${f.action_needed || 'N/A'}</p>
+        </div>
+      `).join('')}
+      ` : ''}
+      
+      ${categorized.risk.length > 0 ? `
+      <h3 class="title-orange" style="margin-top:20px;">Risk Factors</h3>
+      ${categorized.risk.map(f => `
+        <div class="finding-card" style="border-color:#f97316;">
+          <p><strong>Finding:</strong> ${f.finding || 'N/A'}</p>
+          <p><strong>Significance:</strong> ${f.significance || 'N/A'}</p>
+          <p><strong>Action:</strong> ${f.action_needed || 'N/A'}</p>
+        </div>
+      `).join('')}
+      ` : ''}
     </div>
     ` : ''}
 
-    <!-- Questions for Doctor -->
     ${data.doctor_questions && data.doctor_questions.length > 0 ? `
     <div class="section">
       <h2>💬 Questions for Your Doctor</h2>
       <ul class="question-list">
-        ${data.doctor_questions.map((question: string, idx: number) => `
+        ${data.doctor_questions.map((q: string, i: number) => `
         <li class="question-item">
-          <div class="question-number">${idx + 1}</div>
-          <div>${question}</div>
+          <div class="question-number">${i + 1}</div>
+          <div>${q}</div>
         </li>
         `).join('')}
       </ul>
     </div>
     ` : ''}
 
-    <!-- Next Steps -->
     ${data.next_steps ? `
-    <div class="next-steps">
-      <h2>💡 Next Steps</h2>
+    <div class="enhanced-box box-blue" style="margin:20px 0;">
+      <div class="box-title title-blue">💡 Next Steps</div>
       <p>${data.next_steps}</p>
     </div>
     ` : ''}
 
-    <!-- Metadata -->
-    <div class="section">
-      <h3>Report Information</h3>
-      <div class="metadata-grid">
-        <div class="metadata-item">
-          <div class="metadata-label">Session ID</div>
-          <div class="metadata-value">${data.session_id || 'N/A'}</div>
-        </div>
-        <div class="metadata-item">
-          <div class="metadata-label">Tone</div>
-          <div class="metadata-value">${data.tone || 'Friendly'}</div>
-        </div>
-        <div class="metadata-item">
-          <div class="metadata-label">Language Level</div>
-          <div class="metadata-value">${data.language_level || 'Simple'}</div>
-        </div>
-        <div class="metadata-item">
-          <div class="metadata-label">Generated</div>
-          <div class="metadata-value">${new Date(data.created_at).toLocaleString()}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Disclaimer -->
     <div class="disclaimer">
-      <strong>⚠️ Important Disclaimer:</strong> ${data.disclaimer || 'These insights are for informational purposes only and do not constitute medical advice. Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.'}
+      <strong>⚠️ Important Disclaimer:</strong> This interpretation is for educational purposes only. Please consult your healthcare provider for medical advice.
     </div>
 
-    <!-- Footer -->
-    <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; color: #6b7280; font-size: 14px;">
-      <p>Generated by <strong style="color: #10b981;">Althea AI</strong></p>
+    <div style="text-align:center; margin-top:40px; padding-top:20px; border-top:2px solid #e5e7eb; color:#6b7280; font-size:14px;">
+      <p>Generated by <strong style="color:#10b981;">Althea AI</strong></p>
       <p>© ${new Date().getFullYear()} Althea Health Analytics. All rights reserved.</p>
     </div>
   </div>
