@@ -34,25 +34,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
   const [, setUploadComplete] = useState(false);
   const MAX_FILES = 5;
 
-  // Enhanced progress tracking
-  const [fileProgress, setFileProgress] = useState<Array<{
-    fileId: string;
-    fileName: string;
-    status: 'pending' | 'uploading' | 'uploaded' | 'parsing' | 'parsed' | 'failed' | 'skipped';
-    stage: string;
-    progress: number;
-    error?: string;
-    details?: {
-      testCount?: number;
-      patient?: string;
-      lab?: string;
-    };
-  }>>([]);
-  const [overallProgress, setOverallProgress] = useState(0);
-  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([]);
-
   React.useEffect(() => {
     checkApiKeyStatus();
   }, []);
@@ -162,35 +143,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       return;
     }
 
-    await handleUploadFilesWithProgress();
+    await handleUploadFiles();
   };
 
-  const updateFileProgress = (fileId: string, updates: Partial<typeof fileProgress[0]>) => {
-    setFileProgress(prev => prev.map(f => f.fileId === fileId ? { ...f, ...updates } : f));
-  };
-
-  const handleUploadFilesWithProgress = async () => {
+  const handleUploadFiles = async () => {
     if (!user || files.length === 0) return;
 
     setProcessing(true);
-    setParsingInProgress(true);
-
-    // Initialize progress tracking
-    const initialProgress = files.map((file, index) => ({
-      fileId: `temp-${index}`,
-      fileName: file.name,
-      status: 'pending' as const,
-      stage: 'Waiting...',
-      progress: 0,
-      error: undefined,
-      details: undefined,
-    }));
-    setFileProgress(initialProgress);
-
-    const startTime = Date.now();
-
     try {
-      // Create session
       const { data: session, error: sessionError} = await supabase
         .from('sessions')
         .insert({
@@ -208,98 +168,44 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
       const uploadedIds: string[] = [];
 
-      // Upload files with progress tracking
       for (let i = 0; i < files.length; i++) {
-        if (isPaused) {
-          await new Promise(resolve => {
-            const checkPaused = setInterval(() => {
-              if (!isPaused) {
-                clearInterval(checkPaused);
-                resolve(true);
-              }
-            }, 500);
-          });
+        const file = files[i];
+        const filePath = `${user.id}/${session.id}/${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('medical-files')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: fileData, error: insertError } = await supabase.from('files')
+          .insert({
+            session_id: session.id,
+            user_id: user.id,
+            storage_path: filePath,
+            file_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('File insert error:', insertError);
+          throw insertError;
         }
 
-        const file = files[i];
-        const tempId = `temp-${i}`;
-
-        try {
-          // Update to uploading
-          updateFileProgress(tempId, {
-            status: 'uploading',
-            stage: 'Uploading file...',
-            progress: 0,
-          });
-
-          const filePath = `${user.id}/${session.id}/${file.name}`;
-          const { error: uploadError } = await supabase.storage
-            .from('medical-files')
-            .upload(filePath, file);
-
-          if (uploadError) throw uploadError;
-
-          updateFileProgress(tempId, {
-            progress: 50,
-            stage: 'Saving metadata...',
-          });
-
-          const { data: fileData, error: insertError } = await supabase.from('files')
-            .insert({
-              session_id: session.id,
-              user_id: user.id,
-              storage_path: filePath,
-              file_name: file.name,
-              file_type: file.type,
-              file_size: file.size,
-            })
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-
-          if (fileData) {
-            uploadedIds.push(fileData.id);
-            // Update with real file ID
-            updateFileProgress(tempId, {
-              fileId: fileData.id,
-              status: 'uploaded',
-              stage: 'Upload complete',
-              progress: 100,
-            });
-          }
-
-          // Update overall progress
-          const uploadProgress = ((i + 1) / files.length) * 50; // Upload is 50% of total
-          setOverallProgress(uploadProgress);
-
-          // Calculate estimated time
-          const elapsedTime = (Date.now() - startTime) / 1000;
-          const avgTimePerFile = elapsedTime / (i + 1);
-          const remainingFiles = files.length - (i + 1);
-          setEstimatedTimeRemaining(Math.round(avgTimePerFile * remainingFiles * 2)); // *2 for upload + parse
-
-        } catch (fileError: any) {
-          console.error(`Error uploading file ${file.name}:`, fileError);
-          updateFileProgress(tempId, {
-            status: 'failed',
-            stage: 'Upload failed',
-            progress: 0,
-            error: fileError.message || 'Upload failed',
-          });
+        if (fileData) {
+          uploadedIds.push(fileData.id);
         }
       }
 
-      setUploadedFileIds(uploadedIds);
       setProcessing(false);
-
-      // Now parse the uploaded files
-      await handleParseFilesWithProgress(session.id, uploadedIds, startTime);
+      setParsingInProgress(true);
 
       try {
         console.log('=== Calling parse-medical-report edge function ===');
         console.log('Session ID:', session.id);
-        console.log('File IDs:', uploadedFileIds);
+        console.log('File IDs:', uploadedIds);
         console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
 
         const { data: { session: userSession } } = await supabase.auth.getSession();
@@ -319,7 +225,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           },
           body: JSON.stringify({
             sessionId: session.id,
-            fileIds: uploadedFileIds,
+            fileIds: uploadedIds,
             forceReparse: false,
           }),
         });
