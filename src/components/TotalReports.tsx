@@ -26,12 +26,13 @@ interface TotalReportsProps {
 
 interface GeneratedReport {
   id: string;
+  session_id: string;
+  insight_id: string;
+  title: string;
   report_type: string;
-  report_version: number;
-  report_data: any;
   storage_path: string;
-  generated_at: string;
   file_size: number;
+  created_at: string;
 }
 
 export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
@@ -1023,12 +1024,12 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                                     <span className={`font-medium ${
                                       darkMode ? 'text-white' : 'text-gray-900'
                                     }`}>
-                                      {report.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Report
+                                      {report.title || report.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                                     </span>
                                     <span className={`text-xs px-2 py-1 rounded-full ${
                                       darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
                                     }`}>
-                                      v{report.report_version}
+                                      v1
                                     </span>
                                   </div>
                                   <div className={`flex items-center space-x-3 text-xs ${
@@ -1036,7 +1037,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                                   }`}>
                                     <span className="flex items-center">
                                       <Clock className="w-3 h-3 mr-1" />
-                                      {new Date(report.generated_at).toLocaleDateString()}
+                                      {new Date(report.created_at).toLocaleDateString()}
                                     </span>
                                     <span>•</span>
                                     <span>{(report.file_size / 1024).toFixed(1)} KB</span>
