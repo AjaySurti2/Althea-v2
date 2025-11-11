@@ -230,27 +230,42 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           }),
         });
 
-        console.log('Edge function response status:', response.status);
-        console.log('Edge function response ok:', response.ok);
+        console.log('✅ Edge function response status:', response.status);
+        console.log('✅ Edge function response ok:', response.ok);
+
+        // Log response headers for debugging
+        console.log('📋 Response headers:', {
+          'content-type': response.headers.get('content-type'),
+          'content-length': response.headers.get('content-length')
+        });
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('Edge function error response:', errorText);
+          console.error('❌ Edge function error response:', errorText);
+          console.error('❌ Status code:', response.status);
+          console.error('❌ Status text:', response.statusText);
+
           let errorData;
           try {
             errorData = JSON.parse(errorText);
-          } catch {
+          } catch (parseErr) {
+            console.error('❌ Failed to parse error as JSON:', parseErr);
             errorData = { error: errorText };
           }
-          throw new Error(errorData.error || `Failed to parse documents (${response.status})`);
+
+          const errorMsg = errorData.error || errorText || `HTTP ${response.status}: ${response.statusText}`;
+          console.error('❌ Final error message:', errorMsg);
+          throw new Error(errorMsg);
         }
 
         const result = await response.json();
-        console.log('Edge function success:', result);
+        console.log('✅ Edge function success response received');
+        console.log('📦 Full result:', JSON.stringify(result, null, 2));
 
         // Handle the new response format with summary
         const summary = result.summary || {};
         console.log(`📊 Parsing Summary: ${summary.successful || 0} successful, ${summary.skipped || 0} skipped, ${summary.failed || 0} failed`);
+        console.log(`📊 Total files processed: ${summary.total || 0}`);
 
         if (result.errors && result.errors.length > 0) {
           console.error('Edge function returned errors:', result.errors);
