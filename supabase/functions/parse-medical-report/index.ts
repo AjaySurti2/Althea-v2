@@ -124,12 +124,47 @@ async function parseWithOpenAIVision(arrayBuffer: ArrayBuffer, fileType: string)
     throw new Error("Empty response from OpenAI");
   }
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  // Extract JSON from response with better error handling
+  let jsonString = content.trim();
+
+  // Remove markdown code blocks if present
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+  }
+
+  // Try to extract JSON object
+  const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("Failed to extract JSON from response");
   }
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (parseError: any) {
+    // Enhanced JSON parsing error handling
+    console.error("JSON Parse Error:", parseError.message);
+    console.error("Problematic JSON substring:", jsonMatch[0].substring(0, 500));
+
+    // Try to fix common JSON issues
+    let fixedJson = jsonMatch[0]
+      // Fix single quotes to double quotes
+      .replace(/'/g, '"')
+      // Fix unquoted keys
+      .replace(/(\{|,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+      // Remove trailing commas
+      .replace(/,(\s*[}\]])/g, '$1')
+      // Fix newlines in strings
+      .replace(/"\s*\n\s*"/g, '" "');
+
+    try {
+      parsed = JSON.parse(fixedJson);
+      console.log("✅ JSON fixed and parsed successfully");
+    } catch (secondError: any) {
+      throw new Error(`JSON parsing failed: ${parseError.message} at position ${parseError.message.match(/position (\d+)/)?.[1] || 'unknown'}`);
+    }
+  }
+
   console.log(`✅ [Optimization] Parsed in single API call (50% cost reduction)`);
 
   return parsed;
@@ -208,9 +243,54 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
 
   if (labReportError) throw labReportError;
 
+  // Normalize and validate status values
+  const normalizeStatus = (rawStatus: string): string => {
+    if (!rawStatus) return "PENDING";
+
+    const status = rawStatus.toUpperCase().trim();
+    const validStatuses = ['NORMAL', 'HIGH', 'LOW', 'CRITICAL', 'ABNORMAL', 'PENDING'];
+
+    // Direct match
+    if (validStatuses.includes(status)) {
+      return status;
+    }
+
+    // Fuzzy matching for common variations
+    const statusMap: Record<string, string> = {
+      'H': 'HIGH',
+      'L': 'LOW',
+      'N': 'NORMAL',
+      'C': 'CRITICAL',
+      'A': 'ABNORMAL',
+      'ELEVATED': 'HIGH',
+      'INCREASED': 'HIGH',
+      'DECREASED': 'LOW',
+      'REDUCED': 'LOW',
+      'OK': 'NORMAL',
+      'FINE': 'NORMAL',
+      'WITHIN': 'NORMAL',
+      'DANGER': 'CRITICAL',
+      'URGENT': 'CRITICAL',
+      'ABNORM': 'ABNORMAL',
+      'OUT': 'ABNORMAL',
+    };
+
+    // Check if status starts with any mapped value
+    for (const [key, value] of Object.entries(statusMap)) {
+      if (status.startsWith(key) || status.includes(key)) {
+        return value;
+      }
+    }
+
+    console.warn(`⚠️ Unknown status "${rawStatus}" normalized to PENDING`);
+    return "PENDING";
+  };
+
   const testResultsBatch: any[] = [];
   for (const panel of parsed.panels || []) {
     for (const test of panel.tests || []) {
+      const normalizedStatus = normalizeStatus(test.status);
+
       testResultsBatch.push({
         lab_report_id: labReport.id,
         user_id: userId,
@@ -219,8 +299,8 @@ async function saveToDatabase(supabase: any, fileData: any, sessionId: string, p
         observed_value: test.value || "",
         unit: test.unit || "",
         reference_range_text: test.range_text || "",
-        status: test.status || "PENDING",
-        is_flagged: ["HIGH", "LOW", "CRITICAL", "ABNORMAL"].includes(test.status),
+        status: normalizedStatus,
+        is_flagged: ["HIGH", "LOW", "CRITICAL", "ABNORMAL"].includes(normalizedStatus),
       });
     }
   }
