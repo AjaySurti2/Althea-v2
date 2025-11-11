@@ -851,9 +851,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Validate that insights have required data
-    if (!existingInsights.executive_summary && !existingInsights.detailed_findings) {
-      console.error("Health insights record exists but lacks executive_summary/detailed_findings:", existingInsights.id);
+    if (!existingInsights.insights_data) {
+      console.error("Health insights record exists but insights_data is null/empty:", existingInsights.id);
       return new Response(
         JSON.stringify({ error: "Health insights data is incomplete. Please regenerate insights." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -861,23 +860,6 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(`Found existing insights with ID: ${existingInsights.id}, proceeding with report generation`);
-
-    // Construct insights object from database columns (NOT insights_data field)
-    const insightsData = {
-      summary: existingInsights.greeting || existingInsights.executive_summary || '',
-      executive_summary: existingInsights.executive_summary || '',
-      key_findings: existingInsights.detailed_findings?.key_findings || [],
-      abnormal_values: existingInsights.detailed_findings?.abnormal_values || [],
-      health_recommendations: existingInsights.detailed_findings?.health_recommendations || [],
-      family_screening_suggestions: existingInsights.family_patterns || [],
-      follow_up_timeline: existingInsights.next_steps || '',
-      questions_for_doctor: existingInsights.doctor_questions || [],
-      enhanced_summary: {
-        greeting: existingInsights.greeting,
-        overall_assessment: existingInsights.executive_summary,
-        key_message: existingInsights.next_steps
-      }
-    };
 
     // Get lab reports and patient info for metadata only
     const { data: labReports, error: reportsError } = await supabase
@@ -906,11 +888,11 @@ Deno.serve(async (req: Request) => {
       .eq("id", patientId)
       .maybeSingle();
 
-    console.log(`Using existing insights data from database columns to create consistent report`);
+    console.log(`Using existing insights data to create consistent report (no regeneration)`);
 
     // Use the SAME insights data that's displayed on screen
     // This ensures the downloaded report matches exactly what the user reviewed
-    const reportContent = transformInsightsToReportFormat(insightsData);
+    const reportContent = transformInsightsToReportFormat(existingInsights.insights_data);
 
     // Generate report ID and metadata
     const reportId = crypto.randomUUID();
@@ -930,7 +912,7 @@ Deno.serve(async (req: Request) => {
       patient,
       reportMetadata,
       logoBase64,
-      insightsData
+      existingInsights?.insights_data
     );
 
     // Save HTML to storage
@@ -948,18 +930,19 @@ Deno.serve(async (req: Request) => {
       console.error("Storage upload error:", uploadError);
     }
 
-    // Save report to database with correct schema
+    // Save report to database
     const { data: savedReport, error: saveError } = await supabase
       .from("health_reports")
       .insert({
         id: reportId,
         user_id: userId,
         session_id: sessionId,
-        insight_id: existingInsights.id,
-        title: 'Comprehensive Health Report',
         report_type: reportType,
+        report_version: 1,
+        report_data: reportContent,
         storage_path: storagePath,
-        file_size: htmlContent.length
+        file_size: htmlContent.length,
+        generated_at: new Date().toISOString()
       })
       .select()
       .single();
@@ -970,9 +953,9 @@ Deno.serve(async (req: Request) => {
     let questions = [];
     if (includeQuestions) {
       // Try multiple possible field names for questions
-      const existingQuestions = insightsData.questions_for_doctor ||
-                                insightsData.questions ||
-                                insightsData.doctor_questions ||
+      const existingQuestions = existingInsights.insights_data.questions_for_doctor ||
+                                existingInsights.insights_data.questions ||
+                                existingInsights.insights_data.doctor_questions ||
                                 [];
 
       if (Array.isArray(existingQuestions) && existingQuestions.length > 0) {
