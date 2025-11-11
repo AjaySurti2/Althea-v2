@@ -86,7 +86,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       // Load health insights
       const { data: healthInsights, error: insightsError } = await supabase
         .from('health_insights')
-        .select('id, session_id, insights_data, report_storage_path, created_at')
+        .select('id, session_id, executive_summary, detailed_findings, report_storage_path, report_id, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -332,7 +332,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       console.log('Checking for existing health insights for session:', sessionId);
       const { data: existingInsights, error: insightsError } = await supabase
         .from('health_insights')
-        .select('id, insights_data, report_storage_path')
+        .select('id, executive_summary, detailed_findings, report_storage_path, report_id')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -343,7 +343,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         throw new Error('Failed to check health insights: ' + insightsError.message);
       }
 
-      if (!existingInsights || !existingInsights.insights_data) {
+      if (!existingInsights || !existingInsights.executive_summary) {
         throw new Error('No health insights found. Please generate insights first by completing the upload workflow.');
       }
 
