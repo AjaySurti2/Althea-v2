@@ -83,6 +83,17 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
 
       if (parsedError) throw parsedError;
 
+      // Load health insights
+      const { data: healthInsights, error: insightsError } = await supabase
+        .from('health_insights')
+        .select('id, session_id, insights_data, report_storage_path, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (insightsError) {
+        console.warn('Error loading health insights:', insightsError);
+      }
+
       // Load generated health reports
       const { data: healthReports, error: reportsError } = await supabase
         .from('health_reports')
@@ -94,7 +105,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         console.warn('Error loading health reports:', reportsError);
       }
 
-      // Group files, parsed data, and generated reports by session
+      // Group files, parsed data, health insights, and generated reports by session
       const processedSessions = sessionsData?.map(session => ({
         ...session,
         files: filesData?.filter((f: any) =>
@@ -102,6 +113,9 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         ) || [],
         parsedReports: parsedData?.filter((p: any) =>
           p.session_id === session.id
+        ) || [],
+        healthInsights: healthInsights?.filter((i: any) =>
+          i.session_id === session.id
         ) || [],
         generatedReports: healthReports?.filter((r: any) =>
           r.session_id === session.id
@@ -984,8 +998,16 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                         Health Insights Report
                       </h4>
 
-                      {/* Show View/Download buttons ONLY if reports exist */}
-                      {session.generatedReports && session.generatedReports.length > 0 ? (
+                      {/*
+                        SMART DISPLAY LOGIC:
+                        1. Check if health_insights exist (insights generated)
+                        2. Check if health_reports exist (report file generated)
+                        3. Show View/Download ONLY if both exist
+                        4. Show Generate button ONLY if insights exist but report doesn't
+                        5. Don't show anything if no insights exist yet
+                      */}
+                      {session.healthInsights && session.healthInsights.length > 0 && session.generatedReports && session.generatedReports.length > 0 ? (
+                        /* BOTH health_insights AND health_reports exist - Show View/Download buttons */
                         <div className="space-y-3">
                           {session.generatedReports.map((report: GeneratedReport) => (
                             <div
@@ -1055,8 +1077,8 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        /* Show Generate button ONLY if no reports exist */
+                      ) : session.healthInsights && session.healthInsights.length > 0 ? (
+                        /* health_insights exist but health_reports don't - Show Generate button */
                         <button
                           onClick={() => handleGenerateReport(session.id)}
                           disabled={generatingReport === session.id}
@@ -1078,6 +1100,18 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                             </>
                           )}
                         </button>
+                      ) : (
+                        /* No health_insights exist yet - Show informational message */
+                        <div className={`text-center py-4 px-3 rounded-lg ${
+                          darkMode ? 'bg-gray-700/50' : 'bg-gray-100'
+                        }`}>
+                          <AlertCircle className={`w-8 h-8 mx-auto mb-2 ${
+                            darkMode ? 'text-gray-500' : 'text-gray-400'
+                          }`} />
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            Complete the upload workflow to generate health insights first.
+                          </p>
+                        </div>
                       )}
                     </div>
                   )}
