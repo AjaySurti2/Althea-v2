@@ -24,16 +24,6 @@ interface TotalReportsProps {
   darkMode: boolean;
 }
 
-interface GeneratedReport {
-  id: string;
-  session_id: string;
-  insight_id: string;
-  title: string;
-  report_type: string;
-  storage_path: string;
-  file_size: number;
-  created_at: string;
-}
 
 export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
   const { user } = useAuth();
@@ -44,9 +34,8 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'file' | 'session'; id: string } | null>(null);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
-  const [viewingGeneratedReport, setViewingGeneratedReport] = useState<GeneratedReport | null>(null);
+  const [viewingReportHtml, setViewingReportHtml] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState<string | null>(null);
-  const [reportPreviewHtml, setReportPreviewHtml] = useState<string | null>(null);
 
   useEffect(() => {
     loadSessions();
@@ -87,7 +76,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       // Load health insights
       const { data: healthInsights, error: insightsError } = await supabase
         .from('health_insights')
-        .select('id, session_id, executive_summary, detailed_findings, report_storage_path, report_id, created_at')
+        .select('id, session_id, executive_summary, detailed_findings, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -95,18 +84,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         console.warn('Error loading health insights:', insightsError);
       }
 
-      // Load generated health reports
-      const { data: healthReports, error: reportsError } = await supabase
-        .from('health_reports')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('generated_at', { ascending: false });
-
-      if (reportsError) {
-        console.warn('Error loading health reports:', reportsError);
-      }
-
-      // Group files, parsed data, health insights, and generated reports by session
+      // Group files, parsed data, and health insights by session
       const processedSessions = sessionsData?.map(session => ({
         ...session,
         files: filesData?.filter((f: any) =>
@@ -117,16 +95,10 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
         ) || [],
         healthInsights: healthInsights?.filter((i: any) =>
           i.session_id === session.id
-        ) || [],
-        generatedReports: healthReports?.filter((r: any) =>
-          r.session_id === session.id
         ) || []
       })) || [];
 
       setSessions(processedSessions);
-
-      // Background check: Trigger report pre-generation for sessions with insights but no reports
-      checkAndPreGenerateReports(processedSessions);
     } catch (error: any) {
       console.error('Error loading sessions:', error);
       alert(`Failed to load sessions: ${error.message}`);
@@ -135,80 +107,6 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
     }
   };
 
-  // Check for sessions with insights but no generated reports and trigger background generation
-  const checkAndPreGenerateReports = async (sessions: any[]) => {
-    if (!user) return;
-
-    for (const session of sessions) {
-      // Skip if session already has generated reports
-      if (session.generatedReports && session.generatedReports.length > 0) {
-        continue;
-      }
-
-      // Skip if session has no parsed reports (no insights to generate from)
-      if (!session.parsedReports || session.parsedReports.length === 0) {
-        continue;
-      }
-
-      // Check if health insights exist for this session
-      try {
-        const { data: insights, error } = await supabase
-          .from('health_insights')
-          .select('id, report_storage_path')
-          .eq('session_id', session.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) {
-          console.warn(`Error checking insights for session ${session.id}:`, error);
-          continue;
-        }
-
-        // If insights exist but no report is cached, trigger background generation
-        if (insights && !insights.report_storage_path) {
-          console.log(`Background: Triggering report generation for session ${session.id}`);
-          // Don't await - let it run in background
-          generateReportInBackground(session.id);
-        }
-      } catch (err) {
-        console.warn(`Error in background check for session ${session.id}:`, err);
-      }
-    }
-  };
-
-  // Background report generation (non-blocking)
-  const generateReportInBackground = async (sessionId: string) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          sessionId,
-          reportType: 'comprehensive',
-          includeQuestions: true
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`Background report generated for session ${sessionId}:`, result.cached ? 'cached' : 'new');
-        // Silently reload sessions to update UI
-        await loadSessions();
-      }
-    } catch (error) {
-      // Silent failure - this is background operation
-      console.warn(`Background report generation failed for session ${sessionId}:`, error);
-    }
-  };
 
   const toggleSessionExpansion = (sessionId: string) => {
     setExpandedSessions(prev => {
@@ -314,137 +212,322 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
     }
   };
 
-  const handleGenerateReport = async (sessionId: string) => {
+  // Generate HTML report from health insights data
+  const generateHealthReportHTML = (data: any): string => {
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    // Categorize findings
+    const categorizeFindings = (findings: any[]) => {
+      const categories = {
+        lifestyle: [] as any[],
+        genetic: [] as any[],
+        risk: [] as any[]
+      };
+
+      if (Array.isArray(findings)) {
+        findings.forEach(finding => {
+          const cat = (finding.category || '').toLowerCase();
+          if (cat.includes('lifestyle') || cat.includes('diet') || cat.includes('exercise')) {
+            categories.lifestyle.push(finding);
+          } else if (cat.includes('genetic') || cat.includes('hereditary') || cat.includes('family')) {
+            categories.genetic.push(finding);
+          } else {
+            categories.risk.push(finding);
+          }
+        });
+      }
+      return categories;
+    };
+
+    const categorized = categorizeFindings(data.detailed_findings || []);
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Althea Health Insights Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f9fafb;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #10b981;
+    }
+    .logo { font-size: 32px; font-weight: bold; color: #10b981; }
+    .subtitle { font-size: 14px; font-style: italic; color: #059669; margin-top: 5px; }
+    .date-section { text-align: right; color: #6b7280; font-size: 14px; }
+    h2 {
+      color: #059669;
+      font-size: 22px;
+      margin: 25px 0 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #d1fae5;
+    }
+    h3 { color: #047857; font-size: 18px; margin: 20px 0 10px; }
+    .section {
+      margin: 25px 0;
+      padding: 20px;
+      background: white;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+    }
+    .enhanced-box {
+      padding: 16px;
+      margin: 12px 0;
+      border-radius: 8px;
+      border-left: 4px solid;
+    }
+    .box-blue { background: #eff6ff; border-color: #3b82f6; }
+    .box-green { background: #f0fdf4; border-color: #10b981; }
+    .box-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+    .title-blue { color: #1e40af; }
+    .title-green { color: #047857; }
+    .finding-card {
+      background: #f9fafb;
+      padding: 16px;
+      margin: 12px 0;
+      border-radius: 8px;
+      border-left: 3px solid;
+    }
+    .finding-card p { margin: 8px 0; font-size: 14px; }
+    .finding-card strong { color: #374151; }
+    .question-list { list-style: none; padding: 0; }
+    .question-item {
+      background: #f9fafb;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border-left: 4px solid #10b981;
+      display: flex;
+      gap: 15px;
+    }
+    .question-number {
+      background: #10b981;
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .disclaimer {
+      background: #fef3c7;
+      border: 2px solid #f59e0b;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 30px;
+      color: #92400e;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="logo">Althea AI</div>
+        <div class="subtitle">Your Health Insights Report</div>
+      </div>
+      <div class="date-section">
+        <div><strong>Report Date</strong></div>
+        <div>${currentDate}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>1. Executive Summary</h2>
+
+      ${data.greeting ? `
+      <div class="enhanced-box box-green">
+        <p style="font-size:16px; font-weight:500;">${data.greeting}</p>
+      </div>
+      ` : ''}
+
+      ${data.executive_summary ? `
+      <div class="enhanced-box box-blue">
+        <div class="box-title title-blue">Overall Health Status</div>
+        <p>${data.executive_summary}</p>
+      </div>
+      ` : ''}
+    </div>
+
+    ${(categorized.lifestyle.length > 0 || categorized.genetic.length > 0 || categorized.risk.length > 0) ? `
+    <div class="section">
+      <h2>2. Key Findings by Category</h2>
+
+      ${categorized.lifestyle.length > 0 ? `
+      <h3 class="title-green">Lifestyle Factors</h3>
+      ${categorized.lifestyle.map(f => `
+        <div class="finding-card" style="border-color:#10b981;">
+          <p><strong>Finding:</strong> ${f.finding || 'N/A'}</p>
+          <p><strong>Significance:</strong> ${f.significance || 'N/A'}</p>
+          <p><strong>Action:</strong> ${f.action_needed || 'N/A'}</p>
+        </div>
+      `).join('')}
+      ` : ''}
+
+      ${categorized.genetic.length > 0 ? `
+      <h3 class="title-blue" style="margin-top:20px;">Genetic & Hereditary Factors</h3>
+      ${categorized.genetic.map(f => `
+        <div class="finding-card" style="border-color:#3b82f6;">
+          <p><strong>Finding:</strong> ${f.finding || 'N/A'}</p>
+          <p><strong>Significance:</strong> ${f.significance || 'N/A'}</p>
+          <p><strong>Action:</strong> ${f.action_needed || 'N/A'}</p>
+        </div>
+      `).join('')}
+      ` : ''}
+
+      ${categorized.risk.length > 0 ? `
+      <h3 style="color:#c2410c; margin-top:20px;">Risk Factors</h3>
+      ${categorized.risk.map(f => `
+        <div class="finding-card" style="border-color:#f97316;">
+          <p><strong>Finding:</strong> ${f.finding || 'N/A'}</p>
+          <p><strong>Significance:</strong> ${f.significance || 'N/A'}</p>
+          <p><strong>Action:</strong> ${f.action_needed || 'N/A'}</p>
+        </div>
+      `).join('')}
+      ` : ''}
+    </div>
+    ` : ''}
+
+    ${data.doctor_questions && data.doctor_questions.length > 0 ? `
+    <div class="section">
+      <h2>💬 Questions for Your Doctor</h2>
+      <ul class="question-list">
+        ${data.doctor_questions.map((q: string, i: number) => `
+        <li class="question-item">
+          <div class="question-number">${i + 1}</div>
+          <div>${q}</div>
+        </li>
+        `).join('')}
+      </ul>
+    </div>
+    ` : ''}
+
+    ${data.next_steps ? `
+    <div class="enhanced-box box-blue" style="margin:20px 0;">
+      <div class="box-title title-blue">💡 Next Steps</div>
+      <p>${data.next_steps}</p>
+    </div>
+    ` : ''}
+
+    <div class="disclaimer">
+      <strong>⚠️ Important Disclaimer:</strong> This interpretation is for educational purposes only. Please consult your healthcare provider for medical advice.
+    </div>
+
+    <div style="text-align:center; margin-top:40px; padding-top:20px; border-top:2px solid #e5e7eb; color:#6b7280; font-size:14px;">
+      <p>Generated by <strong style="color:#10b981;">Althea AI</strong></p>
+      <p>© ${new Date().getFullYear()} Althea Health Analytics. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+  };
+
+  const handleViewReport = async (sessionId: string) => {
     try {
       setGeneratingReport(sessionId);
 
-      // Verify authentication
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        throw new Error('Authentication error: ' + sessionError.message);
-      }
-      if (!session) {
-        console.error('No active session found');
-        throw new Error('Not authenticated. Please sign in again.');
-      }
-
-      // CRITICAL: Check if health insights exist before generating report
-      console.log('Checking for existing health insights for session:', sessionId);
-      const { data: existingInsights, error: insightsError } = await supabase
+      // Fetch health insights data for this session
+      const { data: healthInsightsData, error: fetchError } = await supabase
         .from('health_insights')
-        .select('id, executive_summary, detailed_findings, report_storage_path, report_id')
+        .select('*')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (insightsError) {
-        console.error('Error checking insights:', insightsError);
-        throw new Error('Failed to check health insights: ' + insightsError.message);
+      if (fetchError) {
+        throw new Error('Failed to fetch health insights: ' + fetchError.message);
       }
 
-      if (!existingInsights || !existingInsights.executive_summary) {
-        throw new Error('No health insights found. Please generate insights first by completing the upload workflow.');
+      if (!healthInsightsData) {
+        throw new Error('No health insights found for this session.');
       }
 
-      console.log('Health insights verified. Generating report for session:', sessionId);
-
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          sessionId,
-          reportType: 'comprehensive',
-          includeQuestions: true
-        })
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to generate report';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-          console.error('Edge function error response:', errorData);
-        } catch (parseError) {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-          console.error('Edge function error (text):', errorText);
-        }
-        throw new Error(`${errorMessage} (Status: ${response.status})`);
-      }
-
-      const result = await response.json();
-      console.log('Report generation result:', result.cached ? 'Using cached report' : 'Generated new report');
-
-      // Reload sessions to show the new report
-      await loadSessions();
-      alert('Health Insights Report generated successfully! You can now download it from the reports list.');
+      // Generate HTML report
+      const reportHtml = generateHealthReportHTML(healthInsightsData);
+      setViewingReportHtml(reportHtml);
     } catch (error: any) {
-      console.error('Error generating report:', error);
-      alert(`Failed to generate report: ${error.message}\n\nPlease try again or contact support if the problem persists.`);
+      console.error('Error viewing report:', error);
+      alert(`Failed to view report: ${error.message}`);
     } finally {
       setGeneratingReport(null);
     }
   };
 
-  const handleViewGeneratedReport = async (report: GeneratedReport) => {
+  const handleDownloadReport = async (sessionId: string) => {
     try {
-      const { data, error } = await supabase.storage
-        .from('health-reports')
-        .download(report.storage_path);
+      setGeneratingReport(sessionId);
 
-      if (error) throw error;
+      // Fetch health insights data for this session
+      const { data: healthInsightsData, error: fetchError } = await supabase
+        .from('health_insights')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      const htmlContent = await data.text();
-      setReportPreviewHtml(htmlContent);
-      setViewingGeneratedReport(report);
+      if (fetchError) {
+        throw new Error('Failed to fetch health insights: ' + fetchError.message);
+      }
 
-      // Log view access
-      await supabase.from('report_access_log').insert({
-        report_id: report.id,
-        user_id: user?.id,
-        action: 'viewed'
-      });
-    } catch (error: any) {
-      console.error('Error viewing report:', error);
-      alert(`Failed to view report: ${error.message}`);
-    }
-  };
+      if (!healthInsightsData) {
+        throw new Error('No health insights found for this session.');
+      }
 
-  const handleDownloadGeneratedReport = async (report: GeneratedReport) => {
-    try {
-      const { data, error } = await supabase.storage
-        .from('health-reports')
-        .download(report.storage_path);
+      // Generate HTML report
+      const reportHtml = generateHealthReportHTML(healthInsightsData);
 
-      if (error) throw error;
-
-      const url = URL.createObjectURL(data);
+      // Create blob and download
+      const blob = new Blob([reportHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `althea-health-report-${report.id.substring(0, 8)}.html`;
+      link.download = `Althea-Health-Report-${new Date().toISOString().split('T')[0]}.html`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      // Log download access
-      await supabase.from('report_access_log').insert({
-        report_id: report.id,
-        user_id: user?.id,
-        action: 'downloaded'
-      });
-
-      alert('Report downloaded successfully!');
     } catch (error: any) {
       console.error('Error downloading report:', error);
       alert(`Failed to download report: ${error.message}`);
+    } finally {
+      setGeneratingReport(null);
     }
   };
 
@@ -988,7 +1071,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                     </div>
                   )}
 
-                  {/* Health Insights Reports Section - Smart Display Logic */}
+                  {/* Health Insights Reports Section - Frontend Generated */}
                   {session.parsedReports && session.parsedReports.length > 0 && (
                     <div className={`px-4 py-3 border-t ${
                       darkMode ? 'border-gray-700' : 'border-gray-200'
@@ -999,108 +1082,82 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                         Health Insights Report
                       </h4>
 
-                      {/*
-                        SMART DISPLAY LOGIC:
-                        1. Check if health_insights exist (insights generated)
-                        2. Check if health_reports exist (report file generated)
-                        3. Show View/Download ONLY if both exist
-                        4. Show Generate button ONLY if insights exist but report doesn't
-                        5. Don't show anything if no insights exist yet
-                      */}
-                      {session.healthInsights && session.healthInsights.length > 0 && session.generatedReports && session.generatedReports.length > 0 ? (
-                        /* BOTH health_insights AND health_reports exist - Show View/Download buttons */
-                        <div className="space-y-3">
-                          {session.generatedReports.map((report: GeneratedReport) => (
-                            <div
-                              key={report.id}
-                              className={`rounded-lg border p-4 ${
-                                darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-2 mb-2">
-                                    <FileText className="w-5 h-5 text-green-600" />
-                                    <span className={`font-medium ${
-                                      darkMode ? 'text-white' : 'text-gray-900'
-                                    }`}>
-                                      {report.title || report.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                    </span>
-                                    <span className={`text-xs px-2 py-1 rounded-full ${
-                                      darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                                    }`}>
-                                      v1
-                                    </span>
-                                  </div>
-                                  <div className={`flex items-center space-x-3 text-xs ${
-                                    darkMode ? 'text-gray-400' : 'text-gray-600'
-                                  }`}>
-                                    <span className="flex items-center">
-                                      <Clock className="w-3 h-3 mr-1" />
-                                      {new Date(report.created_at).toLocaleDateString()}
-                                    </span>
-                                    <span>•</span>
-                                    <span>{(report.file_size / 1024).toFixed(1)} KB</span>
-                                    <span>•</span>
-                                    <span className="flex items-center text-green-600 dark:text-green-400">
-                                      <CheckCircle className="w-3 h-3 mr-1" />
-                                      Complete
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-2 ml-4">
-                                  <button
-                                    onClick={() => handleViewGeneratedReport(report)}
-                                    className={`flex items-center space-x-1 px-3 py-2 rounded-lg font-medium transition-all ${
-                                      darkMode
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
-                                    }`}
-                                    title="View Report Data"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                    <span className="hidden sm:inline">View</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleDownloadGeneratedReport(report)}
-                                    className={`flex items-center space-x-1 px-3 py-2 rounded-lg font-medium transition-all ${
-                                      darkMode
-                                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                                        : 'bg-green-500 hover:bg-green-600 text-white'
-                                    }`}
-                                    title="Download Report"
-                                  >
-                                    <Download className="w-4 h-4" />
-                                    <span className="hidden sm:inline">Download</span>
-                                  </button>
-                                </div>
+                      {session.healthInsights && session.healthInsights.length > 0 ? (
+                        /* Health insights exist - Show View/Download buttons */
+                        <div className={`rounded-lg border p-4 ${
+                          darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <FileText className="w-5 h-5 text-green-600" />
+                                <span className={`font-medium ${
+                                  darkMode ? 'text-white' : 'text-gray-900'
+                                }`}>
+                                  Comprehensive Health Report
+                                </span>
+                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                  darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                                }`}>
+                                  Available
+                                </span>
+                              </div>
+                              <div className={`flex items-center space-x-3 text-xs ${
+                                darkMode ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                <span className="flex items-center">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  {new Date(session.healthInsights[0].created_at).toLocaleDateString()}
+                                </span>
+                                <span>•</span>
+                                <span className="flex items-center text-green-600 dark:text-green-400">
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Ready
+                                </span>
                               </div>
                             </div>
-                          ))}
+                            <div className="flex items-center space-x-2 ml-4">
+                              <button
+                                onClick={() => handleViewReport(session.id)}
+                                disabled={generatingReport === session.id}
+                                className={`flex items-center space-x-1 px-3 py-2 rounded-lg font-medium transition-all ${
+                                  generatingReport === session.id
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : darkMode
+                                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                }`}
+                                title="View Report"
+                              >
+                                {generatingReport === session.id ? (
+                                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                                ) : (
+                                  <Eye className="w-4 h-4" />
+                                )}
+                                <span className="hidden sm:inline">View</span>
+                              </button>
+                              <button
+                                onClick={() => handleDownloadReport(session.id)}
+                                disabled={generatingReport === session.id}
+                                className={`flex items-center space-x-1 px-3 py-2 rounded-lg font-medium transition-all ${
+                                  generatingReport === session.id
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : darkMode
+                                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                                      : 'bg-green-500 hover:bg-green-600 text-white'
+                                }`}
+                                title="Download Report"
+                              >
+                                {generatingReport === session.id ? (
+                                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                                <span className="hidden sm:inline">Download</span>
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      ) : session.healthInsights && session.healthInsights.length > 0 ? (
-                        /* health_insights exist but health_reports don't - Show Generate button */
-                        <button
-                          onClick={() => handleGenerateReport(session.id)}
-                          disabled={generatingReport === session.id}
-                          className={`w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
-                            generatingReport === session.id
-                              ? 'bg-gray-400 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md hover:shadow-lg'
-                          }`}
-                        >
-                          {generatingReport === session.id ? (
-                            <>
-                              <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                              <span>Generating Report...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="w-5 h-5" />
-                              <span>Generate Health Insights Report</span>
-                            </>
-                          )}
-                        </button>
                       ) : (
                         /* No health_insights exist yet - Show informational message */
                         <div className={`text-center py-4 px-3 rounded-lg ${
@@ -1124,7 +1181,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
       )}
 
       {/* Report Preview Modal */}
-      {viewingGeneratedReport && reportPreviewHtml && (
+      {viewingReportHtml && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
           <div className={`relative w-full max-w-5xl max-h-[90vh] rounded-xl shadow-2xl overflow-hidden ${
             darkMode ? 'bg-gray-900' : 'bg-white'
@@ -1137,21 +1194,13 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
                   Health Report Preview
                 </h3>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Generated {new Date(viewingGeneratedReport.generated_at).toLocaleString()}
+                  Generated on {new Date().toLocaleDateString()}
                 </p>
               </div>
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => handleDownloadGeneratedReport(viewingGeneratedReport)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download</span>
-                </button>
-                <button
                   onClick={() => {
-                    setViewingGeneratedReport(null);
-                    setReportPreviewHtml(null);
+                    setViewingReportHtml(null);
                   }}
                   className={`p-2 rounded-lg transition-colors ${
                     darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
@@ -1163,7 +1212,7 @@ export const TotalReports: React.FC<TotalReportsProps> = ({ darkMode }) => {
             </div>
             <div className="overflow-y-auto max-h-[calc(90vh-80px)] p-4">
               <iframe
-                srcDoc={reportPreviewHtml}
+                srcDoc={viewingReportHtml}
                 className="w-full h-[800px] border-0"
                 title="Report Preview"
                 sandbox="allow-same-origin"
