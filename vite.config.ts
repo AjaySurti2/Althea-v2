@@ -8,6 +8,9 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
+    port: 5173,
+    strictPort: true,
+    open: true,
     hmr: {
       overlay: false
     },
