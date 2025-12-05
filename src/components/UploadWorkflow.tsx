@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Upload, Sliders, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye, Trash2, Users } from 'lucide-react';
+import { Upload, Sparkles, Download, CheckCircle, ArrowRight, ArrowLeft, FileText, X, Eye, Trash2, Users } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DocumentReview } from './DocumentReview';
@@ -7,7 +8,7 @@ import { DataPreview } from './DataPreview';
 import { ParsedDataReview } from './ParsedDataReview';
 import { HealthInsights } from './HealthInsights';
 import { FamilyDetailsCapture } from './FamilyDetailsCapture';
-import { FileProcessingProgress } from './FileProcessingProgress';
+
 
 interface UploadWorkflowProps {
   darkMode: boolean;
@@ -89,13 +90,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       );
 
       if (pdfFiles.length > 0) {
-        alert(
+        toast.error(
           `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
           `Please convert your PDF medical reports to images:\n` +
           `• Take screenshots of each page\n` +
           `• Use online PDF to PNG/JPEG converters\n` +
           `• Save as PNG, JPEG, or WEBP format\n\n` +
-          `Supported formats: PNG, JPEG, WEBP`
+          `Supported formats: PNG, JPEG, WEBP`,
+          { duration: 6000 }
         );
         e.target.value = ''; // Clear the input
         return;
@@ -104,7 +106,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       const remainingSlots = MAX_FILES - files.length;
 
       if (selectedFiles.length > remainingSlots) {
-        alert(`You can only upload ${MAX_FILES} files per session. ${remainingSlots} slots remaining.`);
+        toast.error(`You can only upload ${MAX_FILES} files per session. ${remainingSlots} slots remaining.`);
         setFiles([...files, ...selectedFiles.slice(0, remainingSlots)]);
       } else {
         setFiles([...files, ...selectedFiles]);
@@ -134,12 +136,12 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleStep1Next = async () => {
     if (files.length === 0) {
-      alert('Please upload at least one file');
+      toast.error('Please upload at least one file');
       return;
     }
 
     if (files.length > MAX_FILES) {
-      alert(`Maximum ${MAX_FILES} files allowed per session`);
+      toast.error(`Maximum ${MAX_FILES} files allowed per session`);
       return;
     }
 
@@ -151,7 +153,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
     setProcessing(true);
     try {
-      const { data: session, error: sessionError} = await supabase
+      const { data: session, error: sessionError } = await supabase
         .from('sessions')
         .insert({
           user_id: user.id,
@@ -273,7 +275,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
           // If some files succeeded, show partial success message
           if (summary.successful > 0 || summary.skipped > 0) {
-            alert(`Parsing completed with some errors:\n\n✅ ${summary.successful} file(s) parsed successfully\n⏭️ ${summary.skipped} file(s) already parsed\n❌ ${summary.failed} file(s) failed\n\nErrors: ${errorMessages}`);
+            toast.success(`Parsing completed with some errors:\n\n✅ ${summary.successful} file(s) parsed successfully\n⏭️ ${summary.skipped} file(s) already parsed\n❌ ${summary.failed} file(s) failed\n\nErrors: ${errorMessages}`, { duration: 5000 });
           } else {
             throw new Error(`All files failed to parse: ${errorMessages}`);
           }
@@ -304,18 +306,18 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch');
 
         if (isFetchError) {
-          alert(`Network Error: Unable to reach the document parsing service.\n\nPossible causes:\n1. The OPENAI_API_KEY is not configured in Supabase Edge Functions\n2. Network connectivity issue\n3. Edge function is not deployed\n\nPlease check:\n- Supabase Dashboard → Edge Functions → parse-medical-report → Secrets\n- Add secret: OPENAI_API_KEY with your OpenAI API key\n\nError details: ${errorMessage}`);
+          toast.error(`Network Error: Unable to reach the document parsing service.\n\nPossible causes:\n1. The OPENAI_API_KEY is not configured in Supabase Edge Functions\n2. Network connectivity issue\n3. Edge function is not deployed\n\nPlease check:\n- Supabase Dashboard → Edge Functions → parse-medical-report → Secrets\n- Add secret: OPENAI_API_KEY with your OpenAI API key\n\nError details: ${errorMessage}`, { duration: 8000 });
         } else if (isApiKeyError) {
-          alert(`API Configuration Error: ${errorMessage}\n\nThe OpenAI API key needs to be configured in Supabase. Please contact your system administrator.`);
+          toast.error(`API Configuration Error: ${errorMessage}\n\nThe OpenAI API key needs to be configured in Supabase. Please contact your system administrator.`, { duration: 8000 });
         } else {
-          alert(`Document parsing failed: ${errorMessage}\n\nCheck the console for details.`);
+          toast.error(`Document parsing failed: ${errorMessage}\n\nCheck the console for details.`, { duration: 6000 });
         }
 
         // Don't show review since parsing failed
         setProcessing(false);
       }
     } catch (error: any) {
-      alert(`Upload failed: ${error.message}`);
+      toast.error(`Upload failed: ${error.message}`);
       setProcessing(false);
       setParsingInProgress(false);
     }
@@ -331,7 +333,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
   const handleDownloadReport = async () => {
     if (!sessionId || !user) {
-      alert('No session data available');
+      toast.error('No session data available');
       return;
     }
 
@@ -357,7 +359,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
       if (!parsedDocs || parsedDocs.length === 0) {
         console.warn('No parsed documents found for session:', sessionId);
-        alert('No parsed data available to generate report. Please complete the document parsing step first.');
+        toast.error('No parsed data available to generate report. Please complete the document parsing step first.');
         return;
       }
 
@@ -375,7 +377,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
       generatePDFReport(parsedDocs);
     } catch (error: any) {
       console.error('Error downloading report:', error);
-      alert(`Failed to download report: ${error.message || 'Unknown error'}. Please try again.`);
+      toast.error(`Failed to download report: ${error.message || 'Unknown error'}. Please try again.`);
     }
   };
 
@@ -522,30 +524,30 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           <div class="header">
             <h1>Medical Report</h1>
             <p>Generated by Althea AI - ${new Date().toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}</p>
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })}</p>
           </div>
 
           ${parsedDocs.map((doc, index) => {
-            const data = doc.structured_data || {};
-            const safeValue = (value: any) => value ? String(value).replace(/[<>]/g, '') : '';
+        const data = doc.structured_data || {};
+        const safeValue = (value: any) => value ? String(value).replace(/[<>]/g, '') : '';
 
-            const profileName = data.profile_name || data.patient_info?.name || data.patient_name || '';
-            const reportDate = data.report_date || data.dates?.report_date || data.test_date || '';
-            const labName = data.lab_name || data.laboratory || '';
-            const doctorName = data.doctor_name || data.doctor_info?.name || data.physician || '';
-            const metrics = data.key_metrics || data.test_results || [];
+        const profileName = data.profile_name || data.patient_info?.name || data.patient_name || '';
+        const reportDate = data.report_date || data.dates?.report_date || data.test_date || '';
+        const labName = data.lab_name || data.laboratory || '';
+        const doctorName = data.doctor_name || data.doctor_info?.name || data.physician || '';
+        const metrics = data.key_metrics || data.test_results || [];
 
-            const hasAnyData = profileName || reportDate || labName || doctorName ||
-                               (metrics && metrics.length > 0) ||
-                               (data.diagnoses && data.diagnoses.length > 0) ||
-                               (data.medications && data.medications.length > 0) ||
-                               (data.recommendations && data.recommendations.length > 0) ||
-                               data.summary;
+        const hasAnyData = profileName || reportDate || labName || doctorName ||
+          (metrics && metrics.length > 0) ||
+          (data.diagnoses && data.diagnoses.length > 0) ||
+          (data.medications && data.medications.length > 0) ||
+          (data.recommendations && data.recommendations.length > 0) ||
+          data.summary;
 
-            return `
+        return `
               ${index > 0 ? '<div style="page-break-before: always;"></div>' : ''}
 
               <div class="section">
@@ -693,7 +695,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 ` : ''}
               </div>
             `;
-          }).join('')}
+      }).join('')}
 
           <div class="footer">
             <p>This report was generated by Althea AI for informational purposes only.</p>
@@ -721,16 +723,16 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        alert('Your medical report has been downloaded. Open it in your browser and use Print to save as PDF.');
+        toast.success('Your medical report has been downloaded. Open it in your browser and use Print to save as PDF.');
       } else {
         newWindow.document.write(htmlContent);
         newWindow.document.close();
         console.log('Report opened successfully in new window');
-        alert('Your medical report has been opened in a new tab. Use your browser\'s Print function (Ctrl/Cmd + P) to save as PDF.');
+        toast.success('Your medical report has been opened in a new tab. Use your browser\'s Print function (Ctrl/Cmd + P) to save as PDF.');
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF report. Please try again.');
+      toast.error('Failed to generate PDF report. Please try again.');
     }
   };
 
@@ -806,31 +808,6 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     setCurrentStep(1);
   };
 
-  const handleCustomizeContinue = async () => {
-    if (!sessionId) {
-      setShowHealthInsights(true);
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('sessions')
-        .update({
-          tone,
-          language_level: languageLevel,
-        })
-        .eq('id', sessionId);
-
-      if (error) {
-        console.error('Failed to update session customization:', error);
-      }
-    } catch (error) {
-      console.error('Error updating customization:', error);
-    }
-
-    setShowHealthInsights(true); // Show Step 3: Health Insights directly (skipped customization)
-  };
-
   const handleDataPreviewBack = () => {
     setShowDataPreview(false);
   };
@@ -856,9 +833,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               </div>
               <button
                 onClick={onCancel}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-                }`}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                  }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -885,7 +861,7 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                   AI Health Insights & Report
+                  AI Health Insights & Report
                 </h1>
                 <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Step 3: AI Health Insights & Report
@@ -893,9 +869,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               </div>
               <button
                 onClick={onCancel}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-                }`}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                  }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -931,9 +906,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               </div>
               <button
                 onClick={onCancel}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-                }`}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                  }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -969,9 +943,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
               </div>
               <button
                 onClick={onCancel}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-                }`}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                  }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1028,9 +1001,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
               <button
                 onClick={onCancel}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
-                }`}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-200 text-gray-600'
+                  }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1038,9 +1010,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
           </div>
 
           {apiKeyStatus && apiKeyStatus.configured && apiKeyStatus.working && (
-            <div className={`mb-6 p-4 rounded-lg border ${
-              darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'
-            }`}>
+            <div className={`mb-6 p-4 rounded-lg border ${darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'
+              }`}>
               <div className="flex items-center space-x-3">
                 <CheckCircle className="w-5 h-5 text-green-600" />
                 <div>
@@ -1072,28 +1043,26 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 return (
                   <div key={step.number} className="flex flex-col items-center">
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all ${
-                        isCompleted
-                          ? 'bg-green-500 text-white'
-                          : isCurrent
+                      className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all ${isCompleted
+                        ? 'bg-green-500 text-white'
+                        : isCurrent
                           ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
                           : darkMode
-                          ? 'bg-gray-800 text-gray-500'
-                          : 'bg-gray-200 text-gray-400'
-                      }`}
+                            ? 'bg-gray-800 text-gray-500'
+                            : 'bg-gray-200 text-gray-400'
+                        }`}
                     >
                       {isCompleted ? <CheckCircle className="w-6 h-6" /> : <StepIcon className="w-6 h-6" />}
                     </div>
                     <span
-                      className={`text-sm font-medium ${
-                        isCurrent || isCompleted
-                          ? darkMode
-                            ? 'text-white'
-                            : 'text-gray-900'
-                          : darkMode
+                      className={`text-sm font-medium ${isCurrent || isCompleted
+                        ? darkMode
+                          ? 'text-white'
+                          : 'text-gray-900'
+                        : darkMode
                           ? 'text-gray-500'
                           : 'text-gray-400'
-                      }`}
+                        }`}
                     >
                       {step.label}
                     </span>
@@ -1148,11 +1117,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                 <div>
                   <label
                     htmlFor="file-upload"
-                    className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
-                      darkMode
-                        ? 'border-gray-700 hover:border-green-500 bg-gray-900/50'
-                        : 'border-gray-300 hover:border-green-500 bg-gray-50'
-                    }`}
+                    className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${darkMode
+                      ? 'border-gray-700 hover:border-green-500 bg-gray-900/50'
+                      : 'border-gray-300 hover:border-green-500 bg-gray-50'
+                      }`}
                   >
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <Upload className={`w-12 h-12 mb-3 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
@@ -1182,16 +1150,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     {files.map((file, index) => (
                       <div
                         key={index}
-                        className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                          darkMode
-                            ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
-                            : 'bg-white border-gray-200 hover:border-gray-300'
-                        }`}
+                        className={`flex items-center justify-between p-4 rounded-xl border transition-all ${darkMode
+                          ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
+                          }`}
                       >
                         <div className="flex items-center space-x-4 flex-1">
-                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                            darkMode ? 'bg-green-500/20' : 'bg-green-50'
-                          }`}>
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${darkMode ? 'bg-green-500/20' : 'bg-green-50'
+                            }`}>
                             <FileText className="w-6 h-6 text-green-600" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1208,11 +1174,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                           {(file.type.startsWith('image/') || file.type === 'application/pdf') && (
                             <button
                               onClick={() => handlePreviewFile(file)}
-                              className={`p-2 rounded-lg transition-colors ${
-                                darkMode
-                                  ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                  : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                              }`}
+                              className={`p-2 rounded-lg transition-colors ${darkMode
+                                ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                                : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                                }`}
                               title="Preview"
                             >
                               <Eye className="w-5 h-5" />
@@ -1221,11 +1186,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                           {/* Download Button */}
                           <button
                             onClick={() => handleDownloadFile(file)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              darkMode
-                                ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-                                : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                            }`}
+                            className={`p-2 rounded-lg transition-colors ${darkMode
+                              ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                              : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                              }`}
                             title="Download"
                           >
                             <Download className="w-5 h-5" />
@@ -1331,11 +1295,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                   <div className="flex justify-between">
                     <button
                       onClick={() => setShowDataPreview(true)}
-                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-                        darkMode
-                          ? 'bg-gray-700 text-white hover:bg-gray-600'
-                          : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                      }`}
+                      className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode
+                        ? 'bg-gray-700 text-white hover:bg-gray-600'
+                        : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                        }`}
                     >
                       <ArrowLeft className="w-5 h-5" />
                       <span>Back</span>
@@ -1403,11 +1366,10 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
                   <button
                     onClick={handleViewDashboard}
-                    className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-lg font-semibold transition-all ${
-                      darkMode
-                        ? 'bg-gray-700 text-white hover:bg-gray-600'
-                        : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                    }`}
+                    className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-lg font-semibold transition-all ${darkMode
+                      ? 'bg-gray-700 text-white hover:bg-gray-600'
+                      : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                      }`}
                   >
                     <span>View in Dashboard</span>
                     <ArrowRight className="w-5 h-5" />
@@ -1415,9 +1377,8 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
 
                   <button
                     onClick={handleStartNew}
-                    className={`w-full px-6 py-3 rounded-lg font-medium transition-all ${
-                      darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                    className={`w-full px-6 py-3 rounded-lg font-medium transition-all ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                      }`}
                   >
                     Upload Another Report
                   </button>

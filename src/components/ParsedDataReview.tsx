@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Calendar, Activity, FileText, Stethoscope, Edit2, Save, X as XIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getStatusColor } from '../utils/status-helpers';
 
 interface ParsedDataReviewProps {
   sessionId: string;
@@ -193,16 +194,7 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
     return [];
   };
 
-  const getStatusColor = (status?: string) => {
-    if (!status) return darkMode ? 'text-gray-400' : 'text-gray-600';
-    const normalized = status.toLowerCase();
-    if (normalized.includes('normal')) return 'text-green-600';
-    if (normalized.includes('high') || normalized.includes('elevated')) return 'text-red-600';
-    if (normalized.includes('low')) return 'text-amber-600';
-    if (normalized.includes('borderline')) return 'text-orange-600';
-    if (normalized.includes('critical')) return 'text-red-700';
-    return darkMode ? 'text-gray-400' : 'text-gray-600';
-  };
+
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Not specified';
@@ -280,9 +272,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
   if (error) {
     return (
       <div className="space-y-6">
-        <div className={`p-6 rounded-xl flex items-start space-x-4 ${
-          darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
-        }`}>
+        <div className={`p-6 rounded-xl flex items-start space-x-4 ${darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
+          }`}>
           <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className={`font-semibold mb-2 ${darkMode ? 'text-red-400' : 'text-red-800'}`}>
@@ -297,11 +288,10 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
         <div className="flex justify-start">
           <button
             onClick={onBack}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              darkMode
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode
                 ? 'bg-gray-700 text-white hover:bg-gray-600'
                 : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-            }`}
+              }`}
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back to Upload</span>
@@ -326,17 +316,15 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
         {parsedDocuments.map((doc, docIndex) => (
           <div
             key={doc.id}
-            className={`rounded-xl border p-6 ${
-              darkMode
+            className={`rounded-xl border p-6 ${darkMode
                 ? 'bg-gray-800 border-gray-700'
                 : 'bg-white border-gray-200'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  darkMode ? 'bg-green-500/20' : 'bg-green-50'
-                }`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${darkMode ? 'bg-green-500/20' : 'bg-green-50'
+                  }`}>
                   <FileText className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
@@ -368,9 +356,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                     <button
                       onClick={handleCancelEdit}
                       disabled={saving}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-                      }`}
+                      className={`p-1.5 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                        }`}
                     >
                       <XIcon className="w-4 h-4" />
                     </button>
@@ -378,9 +365,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                 ) : (
                   <button
                     onClick={() => handleEdit(doc)}
-                    className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                   >
                     <Edit2 className="w-4 h-4" />
                     <span>Edit</span>
@@ -407,9 +393,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                             type="text"
                             value={editedData.profile_name || ''}
                             onChange={(e) => updateField('profile_name', e.target.value)}
-                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
-                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                            }`}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                              }`}
                           />
                         ) : (
                           <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -463,9 +448,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                             type="text"
                             value={editedData.report_date || ''}
                             onChange={(e) => updateField('report_date', e.target.value)}
-                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
-                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                            }`}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                              }`}
                           />
                         ) : (
                           <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -511,9 +495,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                             type="text"
                             value={editedData.lab_name || ''}
                             onChange={(e) => updateField('lab_name', e.target.value)}
-                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
-                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                            }`}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                              }`}
                           />
                         ) : (
                           <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -530,9 +513,8 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
                             type="text"
                             value={editedData.doctor_name || ''}
                             onChange={(e) => updateField('doctor_name', e.target.value)}
-                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${
-                              darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                            }`}
+                            className={`w-full mt-1 px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                              }`}
                           />
                         ) : (
                           <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -564,95 +546,90 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
               {(() => {
                 const metrics = flattenPanelsToMetrics(doc);
                 return metrics.length > 0 && (
-                <div className={`p-4 rounded-lg md:col-span-2 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                  <div className="flex items-center space-x-2 mb-3">
-                    <Activity className="w-5 h-5 text-green-600" />
-                    <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      Key Health Metrics
-                    </h4>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className={`border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                          <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Test</th>
-                          <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Value</th>
-                          <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Range</th>
-                          <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {metrics.map((test: any, idx: number) => (
-                          <tr key={idx} className={`border-b ${darkMode ? 'border-gray-800' : 'border-gray-100'}`}>
-                            <td className={`py-2 px-2 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {editingDoc === doc.id ? (
-                                <input
-                                  type="text"
-                                  value={test.test_name || ''}
-                                  onChange={(e) => updateMetric(idx, 'test_name', e.target.value)}
-                                  className={`w-full px-2 py-1 text-sm rounded border ${
-                                    darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                                  }`}
-                                />
-                              ) : test.test_name}
-                            </td>
-                            <td className={`py-2 px-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {editingDoc === doc.id ? (
-                                <div className="flex space-x-1">
-                                  <input
-                                    type="text"
-                                    value={test.value || ''}
-                                    onChange={(e) => updateMetric(idx, 'value', e.target.value)}
-                                    className={`w-16 px-2 py-1 text-sm rounded border ${
-                                      darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                                    }`}
-                                  />
-                                  <input
-                                    type="text"
-                                    value={test.unit || ''}
-                                    onChange={(e) => updateMetric(idx, 'unit', e.target.value)}
-                                    placeholder="unit"
-                                    className={`w-16 px-2 py-1 text-sm rounded border ${
-                                      darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                                    }`}
-                                  />
-                                </div>
-                              ) : `${test.value} ${test.unit || ''}`}
-                            </td>
-                            <td className={`py-2 px-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {editingDoc === doc.id ? (
-                                <input
-                                  type="text"
-                                  value={test.reference_range || ''}
-                                  onChange={(e) => updateMetric(idx, 'reference_range', e.target.value)}
-                                  className={`w-full px-2 py-1 text-sm rounded border ${
-                                    darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                                  }`}
-                                />
-                              ) : (test.reference_range || 'N/A')}
-                            </td>
-                            <td className={`py-2 px-2`}>
-                              {editingDoc === doc.id ? (
-                                <input
-                                  type="text"
-                                  value={test.interpretation || test.status || ''}
-                                  onChange={(e) => updateMetric(idx, 'interpretation', e.target.value)}
-                                  className={`w-full px-2 py-1 text-sm rounded border ${
-                                    darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                                  }`}
-                                />
-                              ) : (
-                                <span className={`text-xs font-semibold uppercase ${getStatusColor(test.interpretation || test.status)}`}>
-                                  {test.interpretation || test.status || 'N/A'}
-                                </span>
-                              )}
-                            </td>
+                  <div className={`p-4 rounded-lg md:col-span-2 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                    <div className="flex items-center space-x-2 mb-3">
+                      <Activity className="w-5 h-5 text-green-600" />
+                      <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Key Health Metrics
+                      </h4>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className={`border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                            <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Test</th>
+                            <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Value</th>
+                            <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Range</th>
+                            <th className={`text-left py-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {metrics.map((test: any, idx: number) => (
+                            <tr key={idx} className={`border-b ${darkMode ? 'border-gray-800' : 'border-gray-100'}`}>
+                              <td className={`py-2 px-2 font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                {editingDoc === doc.id ? (
+                                  <input
+                                    type="text"
+                                    value={test.test_name || ''}
+                                    onChange={(e) => updateMetric(idx, 'test_name', e.target.value)}
+                                    className={`w-full px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                      }`}
+                                  />
+                                ) : test.test_name}
+                              </td>
+                              <td className={`py-2 px-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                {editingDoc === doc.id ? (
+                                  <div className="flex space-x-1">
+                                    <input
+                                      type="text"
+                                      value={test.value || ''}
+                                      onChange={(e) => updateMetric(idx, 'value', e.target.value)}
+                                      className={`w-16 px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                        }`}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={test.unit || ''}
+                                      onChange={(e) => updateMetric(idx, 'unit', e.target.value)}
+                                      placeholder="unit"
+                                      className={`w-16 px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                        }`}
+                                    />
+                                  </div>
+                                ) : `${test.value} ${test.unit || ''}`}
+                              </td>
+                              <td className={`py-2 px-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                {editingDoc === doc.id ? (
+                                  <input
+                                    type="text"
+                                    value={test.reference_range || ''}
+                                    onChange={(e) => updateMetric(idx, 'reference_range', e.target.value)}
+                                    className={`w-full px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                      }`}
+                                  />
+                                ) : (test.reference_range || 'N/A')}
+                              </td>
+                              <td className={`py-2 px-2`}>
+                                {editingDoc === doc.id ? (
+                                  <input
+                                    type="text"
+                                    value={test.interpretation || test.status || ''}
+                                    onChange={(e) => updateMetric(idx, 'interpretation', e.target.value)}
+                                    className={`w-full px-2 py-1 text-sm rounded border ${darkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                      }`}
+                                  />
+                                ) : (
+                                  <span className={`text-xs font-semibold uppercase ${getStatusColor(test.interpretation || test.status, darkMode)}`}>
+                                    {test.interpretation || test.status || 'N/A'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
                 );
               })()}
             </div>
@@ -669,11 +646,10 @@ export const ParsedDataReview: React.FC<ParsedDataReviewProps> = ({
       <div className="flex justify-between pt-4">
         <button
           onClick={onBack}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-            darkMode
+          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode
               ? 'bg-gray-700 text-white hover:bg-gray-600'
               : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-          }`}
+            }`}
         >
           <ArrowLeft className="w-5 h-5" />
           <span>Back</span>

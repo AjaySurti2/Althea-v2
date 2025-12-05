@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, TrendingUp, Users, Calendar, Settings } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Session, HealthMetric, FamilyPattern, Reminder } from '../lib/supabase';
 import { TotalReports } from './TotalReports';
@@ -46,14 +47,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
     }
   };
 
-  const tabs = [
-    // { id: 'upload' as const, label: 'New Upload', icon: Upload }, // Blocked - will reactivate when required
-    { id: 'reports' as const, label: 'Total Reports', icon: FileText },
-    { id: 'history' as const, label: 'Health History', icon: TrendingUp },
-    { id: 'patterns' as const, label: 'Family Patterns', icon: Users },
-    { id: 'reminders' as const, label: 'Reminders', icon: Calendar },
-    { id: 'settings' as const, label: 'Settings', icon: Settings },
-  ];
+
 
   if (loading) {
     return (
@@ -81,145 +75,127 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
         <div className="grid lg:grid-cols-4 gap-4 mb-8">
           <button
             onClick={() => setActiveTab('reports')}
-            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
-              activeTab === 'reports'
-                ? darkMode
-                  ? 'bg-green-600 ring-2 ring-green-400'
-                  : 'bg-green-500 ring-2 ring-green-300'
-                : darkMode
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${activeTab === 'reports'
+              ? darkMode
+                ? 'bg-green-600 ring-2 ring-green-400'
+                : 'bg-green-500 ring-2 ring-green-300'
+              : darkMode
                 ? 'bg-gray-800 hover:bg-gray-750'
                 : 'bg-white hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${
-                activeTab === 'reports'
-                  ? 'text-white'
-                  : darkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}>
+              <span className={`text-sm font-medium ${activeTab === 'reports'
+                ? 'text-white'
+                : darkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
                 Total Reports
               </span>
-              <FileText className={`w-5 h-5 ${
-                activeTab === 'reports' ? 'text-white' : 'text-green-500'
-              }`} />
+              <FileText className={`w-5 h-5 ${activeTab === 'reports' ? 'text-white' : 'text-green-500'
+                }`} />
             </div>
-            <div className={`text-3xl font-bold ${
-              activeTab === 'reports'
-                ? 'text-white'
-                : darkMode ? 'text-white' : 'text-gray-900'
-            }`}>
+            <div className={`text-3xl font-bold ${activeTab === 'reports'
+              ? 'text-white'
+              : darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
               {sessions.length}
             </div>
           </button>
 
           <button
             onClick={() => setActiveTab('history')}
-            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
-              activeTab === 'history'
-                ? darkMode
-                  ? 'bg-blue-600 ring-2 ring-blue-400'
-                  : 'bg-blue-500 ring-2 ring-blue-300'
-                : darkMode
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${activeTab === 'history'
+              ? darkMode
+                ? 'bg-blue-600 ring-2 ring-blue-400'
+                : 'bg-blue-500 ring-2 ring-blue-300'
+              : darkMode
                 ? 'bg-gray-800 hover:bg-gray-750'
                 : 'bg-white hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${
-                activeTab === 'history'
-                  ? 'text-white'
-                  : darkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}>
+              <span className={`text-sm font-medium ${activeTab === 'history'
+                ? 'text-white'
+                : darkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
                 Health Metrics
               </span>
-              <TrendingUp className={`w-5 h-5 ${
-                activeTab === 'history' ? 'text-white' : 'text-blue-500'
-              }`} />
+              <TrendingUp className={`w-5 h-5 ${activeTab === 'history' ? 'text-white' : 'text-blue-500'
+                }`} />
             </div>
-            <div className={`text-3xl font-bold ${
-              activeTab === 'history'
-                ? 'text-white'
-                : darkMode ? 'text-white' : 'text-gray-900'
-            }`}>
+            <div className={`text-3xl font-bold ${activeTab === 'history'
+              ? 'text-white'
+              : darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
               {metrics.length}
             </div>
           </button>
 
           <button
             onClick={() => setActiveTab('patterns')}
-            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
-              activeTab === 'patterns'
-                ? darkMode
-                  ? 'bg-purple-600 ring-2 ring-purple-400'
-                  : 'bg-purple-500 ring-2 ring-purple-300'
-                : darkMode
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${activeTab === 'patterns'
+              ? darkMode
+                ? 'bg-purple-600 ring-2 ring-purple-400'
+                : 'bg-purple-500 ring-2 ring-purple-300'
+              : darkMode
                 ? 'bg-gray-800 hover:bg-gray-750'
                 : 'bg-white hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${
-                activeTab === 'patterns'
-                  ? 'text-white'
-                  : darkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}>
+              <span className={`text-sm font-medium ${activeTab === 'patterns'
+                ? 'text-white'
+                : darkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
                 Family Patterns
               </span>
-              <Users className={`w-5 h-5 ${
-                activeTab === 'patterns' ? 'text-white' : 'text-purple-500'
-              }`} />
+              <Users className={`w-5 h-5 ${activeTab === 'patterns' ? 'text-white' : 'text-purple-500'
+                }`} />
             </div>
-            <div className={`text-3xl font-bold ${
-              activeTab === 'patterns'
-                ? 'text-white'
-                : darkMode ? 'text-white' : 'text-gray-900'
-            }`}>
+            <div className={`text-3xl font-bold ${activeTab === 'patterns'
+              ? 'text-white'
+              : darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
               {patterns.length}
             </div>
           </button>
 
           <button
             onClick={() => setActiveTab('reminders')}
-            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${
-              activeTab === 'reminders'
-                ? darkMode
-                  ? 'bg-orange-600 ring-2 ring-orange-400'
-                  : 'bg-orange-500 ring-2 ring-orange-300'
-                : darkMode
+            className={`p-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 text-left ${activeTab === 'reminders'
+              ? darkMode
+                ? 'bg-orange-600 ring-2 ring-orange-400'
+                : 'bg-orange-500 ring-2 ring-orange-300'
+              : darkMode
                 ? 'bg-gray-800 hover:bg-gray-750'
                 : 'bg-white hover:bg-gray-50'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${
-                activeTab === 'reminders'
-                  ? 'text-white'
-                  : darkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}>
+              <span className={`text-sm font-medium ${activeTab === 'reminders'
+                ? 'text-white'
+                : darkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
                 Upcoming
               </span>
-              <Calendar className={`w-5 h-5 ${
-                activeTab === 'reminders' ? 'text-white' : 'text-orange-500'
-              }`} />
+              <Calendar className={`w-5 h-5 ${activeTab === 'reminders' ? 'text-white' : 'text-orange-500'
+                }`} />
             </div>
-            <div className={`text-3xl font-bold ${
-              activeTab === 'reminders'
-                ? 'text-white'
-                : darkMode ? 'text-white' : 'text-gray-900'
-            }`}>
+            <div className={`text-3xl font-bold ${activeTab === 'reminders'
+              ? 'text-white'
+              : darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
               {reminders.length}
             </div>
           </button>
         </div>
 
         <div className={`rounded-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg overflow-hidden`}>
-          <div className={`border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} bg-gradient-to-r ${
-            darkMode ? 'from-gray-800 to-gray-750' : 'from-gray-50 to-white'
-          }`}>
+          <div className={`border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} bg-gradient-to-r ${darkMode ? 'from-gray-800 to-gray-750' : 'from-gray-50 to-white'
+            }`}>
             <div className="flex items-center justify-between px-4 py-3">
-              <h3 className={`text-lg font-semibold flex items-center space-x-2 ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <h3 className={`text-lg font-semibold flex items-center space-x-2 ${darkMode ? 'text-white' : 'text-gray-900'
+                }`}>
                 {activeTab === 'reports' && <><FileText className="w-5 h-5 text-green-500" /><span>Total Reports</span></>}
                 {activeTab === 'history' && <><TrendingUp className="w-5 h-5 text-blue-500" /><span>Health History</span></>}
                 {activeTab === 'patterns' && <><Users className="w-5 h-5 text-purple-500" /><span>Family Patterns</span></>}
@@ -228,13 +204,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ darkMode }) => {
               </h3>
               <button
                 onClick={() => setActiveTab('settings')}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  activeTab === 'settings'
-                    ? 'bg-gray-600 text-white shadow-lg'
-                    : darkMode
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'settings'
+                  ? 'bg-gray-600 text-white shadow-lg'
+                  : darkMode
                     ? 'text-gray-400 hover:bg-gray-700'
                     : 'text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
                 title="Settings"
               >
                 <Settings className="w-5 h-5" />
@@ -293,13 +268,14 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       );
 
       if (pdfFiles.length > 0) {
-        alert(
+        toast.error(
           `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
           `Please convert your PDF medical reports to images:\n` +
           `• Take screenshots of each page\n` +
           `• Use online PDF to PNG/JPEG converters\n` +
           `• Save as PNG, JPEG, or WEBP format\n\n` +
-          `Supported formats: PNG, JPEG, WEBP`
+          `Supported formats: PNG, JPEG, WEBP`,
+          { duration: 6000 }
         );
         e.target.value = '';
         return;
@@ -345,10 +321,10 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
         });
       }
 
-      alert('Files uploaded successfully! Processing will begin shortly.');
+      toast.success('Files uploaded successfully! Processing will begin shortly.');
       setFiles([]);
     } catch (error: any) {
-      alert(`Upload failed: ${error.message}`);
+      toast.error(`Upload failed: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -373,9 +349,8 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
           <select
             value={tone}
             onChange={(e) => setTone(e.target.value as any)}
-            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${
-              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
-            }`}
+            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+              }`}
           >
             <option value="friendly">Friendly</option>
             <option value="professional">Professional</option>
@@ -390,9 +365,8 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
           <select
             value={languageLevel}
             onChange={(e) => setLanguageLevel(e.target.value as any)}
-            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${
-              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
-            }`}
+            className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+              }`}
           >
             <option value="simple">Simple (Easy to understand)</option>
             <option value="moderate">Moderate (Some medical terms)</option>
@@ -410,9 +384,8 @@ const UploadTab: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
           multiple
           accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
           onChange={handleFileChange}
-          className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${
-            darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
-          }`}
+          className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-green-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+            }`}
         />
         {files.length > 0 && (
           <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -449,23 +422,21 @@ const HistoryTab: React.FC<{ darkMode: boolean; sessions: Session[]; metrics: He
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`p-6 rounded-xl border ${
-                darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-              }`}
+              className={`p-6 rounded-xl border ${darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Session {new Date(session.created_at).toLocaleDateString()}
                 </span>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  session.status === 'completed'
-                    ? darkMode ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-800' : 'bg-emerald-100 text-emerald-800'
-                    : session.status === 'processing'
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${session.status === 'completed'
+                  ? darkMode ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-800' : 'bg-emerald-100 text-emerald-800'
+                  : session.status === 'processing'
                     ? darkMode ? 'bg-blue-950/50 text-blue-300 border border-blue-800' : 'bg-blue-100 text-blue-800'
                     : session.status === 'failed'
-                    ? darkMode ? 'bg-red-950/50 text-red-300 border border-red-800' : 'bg-red-100 text-red-800'
-                    : darkMode ? 'bg-gray-800 text-gray-300 border border-gray-700' : 'bg-gray-100 text-gray-800'
-                }`}>
+                      ? darkMode ? 'bg-red-950/50 text-red-300 border border-red-800' : 'bg-red-100 text-red-800'
+                      : darkMode ? 'bg-gray-800 text-gray-300 border border-gray-700' : 'bg-gray-100 text-gray-800'
+                  }`}>
                   {session.status}
                 </span>
               </div>
@@ -502,9 +473,8 @@ const PatternsTab: React.FC<{ darkMode: boolean; patterns: FamilyPattern[] }> = 
           {patterns.map((pattern) => (
             <div
               key={pattern.id}
-              className={`p-6 rounded-xl border ${
-                darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-              }`}
+              className={`p-6 rounded-xl border ${darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                }`}
             >
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -515,13 +485,12 @@ const PatternsTab: React.FC<{ darkMode: boolean; patterns: FamilyPattern[] }> = 
                     Detected on {new Date(pattern.detected_at).toLocaleDateString()}
                   </p>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  pattern.risk_level === 'high'
-                    ? darkMode ? 'bg-red-950/50 text-red-300 border border-red-800' : 'bg-red-100 text-red-800'
-                    : pattern.risk_level === 'moderate'
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${pattern.risk_level === 'high'
+                  ? darkMode ? 'bg-red-950/50 text-red-300 border border-red-800' : 'bg-red-100 text-red-800'
+                  : pattern.risk_level === 'moderate'
                     ? darkMode ? 'bg-amber-950/50 text-amber-300 border border-amber-800' : 'bg-amber-100 text-amber-800'
                     : darkMode ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-800' : 'bg-emerald-100 text-emerald-800'
-                }`}>
+                  }`}>
                   {pattern.risk_level} risk
                 </span>
               </div>
@@ -532,9 +501,8 @@ const PatternsTab: React.FC<{ darkMode: boolean; patterns: FamilyPattern[] }> = 
                 {pattern.affected_members.map((member, idx) => (
                   <span
                     key={idx}
-                    className={`px-3 py-1 rounded-lg text-sm ${
-                      darkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-sm ${darkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                      }`}
                   >
                     {member}
                   </span>
@@ -570,9 +538,8 @@ const RemindersTab: React.FC<{ darkMode: boolean; reminders: Reminder[]; onUpdat
           {reminders.map((reminder) => (
             <div
               key={reminder.id}
-              className={`p-6 rounded-xl border ${
-                darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
-              }`}
+              className={`p-6 rounded-xl border ${darkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -588,9 +555,8 @@ const RemindersTab: React.FC<{ darkMode: boolean; reminders: Reminder[]; onUpdat
                     <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
                       Due: {new Date(reminder.due_date).toLocaleDateString()}
                     </span>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      darkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
-                    }`}>
+                    <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                      }`}>
                       {reminder.reminder_type}
                     </span>
                   </div>
@@ -629,9 +595,8 @@ const SettingsTab: React.FC<{
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${
-          darkMode ? 'border-gray-700' : 'border-gray-200'
-        }`}>
+        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${darkMode ? 'border-gray-700' : 'border-gray-200'
+          }`}>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center">
               <Users className="w-6 h-6 text-white" />
@@ -684,9 +649,8 @@ const SettingsTab: React.FC<{
           </button>
         </div>
 
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${
-          darkMode ? 'border-gray-700' : 'border-gray-200'
-        }`}>
+        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${darkMode ? 'border-gray-700' : 'border-gray-200'
+          }`}>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center">
               <FileText className="w-6 h-6 text-white" />
@@ -737,9 +701,8 @@ const SettingsTab: React.FC<{
         </div>
       </div>
 
-      <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${
-        darkMode ? 'border-gray-700' : 'border-gray-200'
-      }`}>
+      <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg border ${darkMode ? 'border-gray-700' : 'border-gray-200'
+        }`}>
         <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
           Account Activity
         </h3>
@@ -771,9 +734,8 @@ const SettingsTab: React.FC<{
         </div>
       </div>
 
-      <div className={`p-6 rounded-xl ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${
-        darkMode ? 'border-red-800' : 'border-red-200'
-      }`}>
+      <div className={`p-6 rounded-xl ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${darkMode ? 'border-red-800' : 'border-red-200'
+        }`}>
         <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-red-400' : 'text-red-900'}`}>
           Danger Zone
         </h3>
@@ -781,7 +743,7 @@ const SettingsTab: React.FC<{
           Permanently delete your account and all associated data. This action cannot be undone.
         </p>
         <button
-          onClick={() => alert('Account deletion feature coming soon. Please contact support for assistance.')}
+          onClick={() => toast('Account deletion feature coming soon. Please contact support for assistance.', { icon: 'ℹ️' })}
           className="py-2 px-4 border-2 border-red-500 text-red-500 rounded-lg font-medium hover:bg-red-500 hover:text-white transition-colors"
         >
           Delete Account

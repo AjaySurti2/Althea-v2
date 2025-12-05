@@ -1,4 +1,5 @@
 import { supabase, FamilyMember } from './supabase';
+import { getCurrentUser } from './auth-utils';
 
 export interface CreateFamilyMemberInput {
   name: string;
@@ -48,7 +49,7 @@ async function logAudit(
   familyMemberId: string | null = null,
   changes: Record<string, unknown> = {}
 ) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return;
 
   await supabase.from('family_audit_log').insert({
@@ -63,10 +64,7 @@ async function logAudit(
 
 export async function createFamilyMember(input: CreateFamilyMemberInput): Promise<{ data: FamilyMember | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const { data, error } = await supabase
       .from('family_members')
@@ -98,10 +96,7 @@ export async function createFamilyMember(input: CreateFamilyMemberInput): Promis
 
 export async function getFamilyMembers(): Promise<{ data: FamilyMember[] | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const { data, error } = await supabase
       .from('family_members')
@@ -121,10 +116,7 @@ export async function getFamilyMembers(): Promise<{ data: FamilyMember[] | null;
 
 export async function getFamilyMemberById(id: string): Promise<{ data: FamilyMember | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const { data, error } = await supabase
       .from('family_members')
@@ -147,10 +139,7 @@ export async function getFamilyMemberById(id: string): Promise<{ data: FamilyMem
 
 export async function updateFamilyMember(input: UpdateFamilyMemberInput): Promise<{ data: FamilyMember | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const updateData: Record<string, unknown> = {};
     if (input.name !== undefined) updateData.name = input.name;
@@ -184,10 +173,7 @@ export async function updateFamilyMember(input: UpdateFamilyMemberInput): Promis
 
 export async function deleteFamilyMember(id: string): Promise<{ success: boolean; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { success: false, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const { error } = await supabase
       .from('family_members')
@@ -209,10 +195,7 @@ export async function deleteFamilyMember(id: string): Promise<{ success: boolean
 
 export async function getHealthTrends(memberId: string | null = null): Promise<{ data: FamilyHealthTrend[] | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     let query = supabase
       .from('family_health_trends')
@@ -238,10 +221,7 @@ export async function getHealthTrends(memberId: string | null = null): Promise<{
 
 export async function analyzeFamilyPatterns(): Promise<{ data: FamilyPatternAnalysis[] | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const { data: familyMembers, error: membersError } = await supabase
       .from('family_members')

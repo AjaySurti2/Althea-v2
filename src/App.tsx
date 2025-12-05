@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -311,6 +312,7 @@ function AppContent() {
         onClose={() => setProfileModalOpen(false)}
         darkMode={darkMode}
       />
+      <Toaster position="top-right" />
     </div>
   );
 }
@@ -319,6 +321,7 @@ function App() {
   return (
     <AuthProvider>
       <AppContent />
+      <Toaster position="top-right" />
     </AuthProvider>
   );
 }

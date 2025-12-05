@@ -1,4 +1,5 @@
 import { supabase, Profile } from './supabase';
+import { getCurrentUser } from './auth-utils';
 
 export interface UpdateProfileInput {
   full_name?: string;
@@ -17,10 +18,7 @@ export interface ChangePasswordInput {
 
 export async function updateProfile(input: UpdateProfileInput): Promise<{ data: Profile | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const updateData: Record<string, unknown> = {};
     if (input.full_name !== undefined) updateData.full_name = input.full_name;
@@ -50,10 +48,7 @@ export async function updateProfile(input: UpdateProfileInput): Promise<{ data: 
 
 export async function getProfile(): Promise<{ data: Profile | null; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { data: null, error: new Error('User not authenticated') };
-    }
+    const user = await getCurrentUser();
 
     const { data, error } = await supabase
       .from('profiles')
@@ -73,9 +68,9 @@ export async function getProfile(): Promise<{ data: Profile | null; error: Error
 
 export async function changePassword(input: ChangePasswordInput): Promise<{ success: boolean; error: Error | null }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !user.email) {
-      return { success: false, error: new Error('User not authenticated') };
+    const user = await getCurrentUser();
+    if (!user.email) {
+      return { success: false, error: new Error('User email not found') };
     }
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
