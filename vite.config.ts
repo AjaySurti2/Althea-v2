@@ -7,6 +7,9 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  esbuild: {
+    target: 'esnext',
+  },
   server: {
     port: 5173,
     strictPort: true,

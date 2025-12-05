@@ -10,6 +10,12 @@ import { HealthInsights } from './HealthInsights';
 import { FamilyDetailsCapture } from './FamilyDetailsCapture';
 
 
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// Set worker source to local file
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
 interface UploadWorkflowProps {
   darkMode: boolean;
   onComplete: () => void;
@@ -80,36 +86,77 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFiles = Array.from(e.target.files);
+  const convertPdfToImages = async (file: File): Promise<File[]> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const images: File[] = [];
+      const totalPages = pdf.numPages;
 
-      // Check for PDF files
-      const pdfFiles = selectedFiles.filter(file =>
-        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-      );
+      toast.loading(`Converting PDF: ${file.name} (${totalPages} pages)...`, { id: 'pdf-convert' });
 
-      if (pdfFiles.length > 0) {
-        toast.error(
-          `PDF files are not currently supported due to OpenAI API limitations.\n\n` +
-          `Please convert your PDF medical reports to images:\n` +
-          `• Take screenshots of each page\n` +
-          `• Use online PDF to PNG/JPEG converters\n` +
-          `• Save as PNG, JPEG, or WEBP format\n\n` +
-          `Supported formats: PNG, JPEG, WEBP`,
-          { duration: 6000 }
-        );
-        e.target.value = ''; // Clear the input
-        return;
+      for (let i = 1; i <= totalPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: context!, viewport: viewport } as any).promise;
+
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (blob) {
+          images.push(new File([blob], `${file.name.replace('.pdf', '')}_page_${i}.png`, { type: 'image/png' }));
+        }
       }
 
-      const remainingSlots = MAX_FILES - files.length;
+      toast.dismiss('pdf-convert');
+      return images;
+    } catch (error) {
+      console.error('Error converting PDF:', error);
+      toast.dismiss('pdf-convert');
+      throw error;
+    }
+  };
 
-      if (selectedFiles.length > remainingSlots) {
-        toast.error(`You can only upload ${MAX_FILES} files per session. ${remainingSlots} slots remaining.`);
-        setFiles([...files, ...selectedFiles.slice(0, remainingSlots)]);
-      } else {
-        setFiles([...files, ...selectedFiles]);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files);
+      const processedFiles: File[] = [];
+
+      setProcessing(true);
+
+      try {
+        for (const file of selectedFiles) {
+          if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            try {
+              const images = await convertPdfToImages(file);
+              processedFiles.push(...images);
+              toast.success(`Converted ${file.name} to ${images.length} image(s)`);
+            } catch (err) {
+              console.error("PDF conversion failed", err);
+              toast.error(`Failed to convert ${file.name}. Please try uploading as images.`);
+            }
+          } else {
+            processedFiles.push(file);
+          }
+        }
+
+        const remainingSlots = MAX_FILES - files.length;
+
+        if (processedFiles.length > remainingSlots) {
+          toast.error(`You can only upload ${MAX_FILES} files per session. ${remainingSlots} slots remaining.`);
+          setFiles([...files, ...processedFiles.slice(0, remainingSlots)]);
+        } else {
+          setFiles([...files, ...processedFiles]);
+        }
+      } catch (error) {
+        console.error('Error processing files:', error);
+        toast.error('An error occurred while processing your files.');
+      } finally {
+        setProcessing(false);
+        e.target.value = ''; // Clear the input
       }
     }
   };
@@ -1105,11 +1152,11 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                     Upload Your Medical Documents
                   </h2>
                   <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                    Select your lab results, prescriptions, or medical reports as images (PNG, JPEG, or WEBP).
+                    Select your lab results, prescriptions, or medical reports as images (PNG, JPEG, WEBP) or PDF.
                   </p>
-                  <div className="mt-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      <strong>Note:</strong> PDF files are not supported. Please convert PDFs to images or take screenshots.
+                  <div className="mt-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Note:</strong> PDF files will be automatically converted to high-quality images for analysis.
                     </p>
                   </div>
                 </div>
@@ -1128,14 +1175,14 @@ export const UploadWorkflow: React.FC<UploadWorkflowProps> = ({ darkMode, onComp
                         <span className="font-semibold">Click to upload</span> or drag and drop
                       </p>
                       <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        PNG, JPEG, WEBP only (MAX. 10MB each)
+                        PNG, JPEG, WEBP, PDF (MAX. 10MB each)
                       </p>
                     </div>
                     <input
                       id="file-upload"
                       type="file"
                       multiple
-                      accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
+                      accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp,application/pdf,.pdf"
                       onChange={handleFileChange}
                       className="hidden"
                     />

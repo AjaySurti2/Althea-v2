@@ -4,6 +4,8 @@ import {
   TrendingUp, Users, Calendar, Download, MessageCircle, Activity,
   Lightbulb, RefreshCw, X
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
 
 interface HealthInsightsProps {
@@ -61,6 +63,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   const [reportCached, setReportCached] = useState(false);
   const [showDataTable, setShowDataTable] = useState(false);
   const [tableData, setTableData] = useState<any>(null);
+  const reportRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadInsights();
@@ -245,49 +248,101 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
     }
   };
 
-  // NEW FUNCTION: Download Health Insights Report as HTML
+  // NEW FUNCTION: Download Health Insights Report as High-Fidelity PDF with Smart Pagination
   const handleDownloadReport = async () => {
     try {
       setGeneratingReport(true);
       setError(null);
 
-      console.log('=== Download Report Button Clicked ===');
+      console.log('=== Download Report Button Clicked (Smart Pagination) ===');
 
-      // Fetch existing health insights data from database
-      const { data: healthInsightsData, error: fetchError } = await supabase
-        .from('health_insights')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (fetchError) {
-        throw new Error('Failed to fetch health insights: ' + fetchError.message);
+      if (!reportRef.current) {
+        throw new Error('Report content not found');
       }
 
-      if (!healthInsightsData) {
-        throw new Error('No health insights found for this session. Please refresh the page.');
+      // 1. Create a clone of the report to manipulate for pagination without affecting the UI
+      const originalElement = reportRef.current;
+      const clone = originalElement.cloneNode(true) as HTMLElement;
+
+      // 2. Set up the clone for A4 PDF generation (approx 794px width at 96 DPI)
+      // This ensures the layout in the PDF matches exactly what we calculate
+      clone.style.width = '794px';
+      clone.style.position = 'absolute';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      clone.style.background = '#ffffff'; // Ensure white background
+      document.body.appendChild(clone);
+
+      // 3. Smart Pagination Logic
+      const pageHeightPx = 1123; // A4 height in pixels at 96 DPI (approx)
+      const pageMargin = 40; // Margin in pixels
+      const contentHeight = pageHeightPx - (pageMargin * 2);
+
+      let currentHeight = 0;
+      const childNodes = Array.from(clone.children) as HTMLElement[];
+
+      childNodes.forEach((child) => {
+        const childHeight = child.offsetHeight;
+
+        // If adding this element exceeds the current page height
+        if (currentHeight + childHeight > contentHeight) {
+          // Add a spacer to push this element to the start of the next page
+          const spacerHeight = contentHeight - currentHeight;
+          const spacer = document.createElement('div');
+          spacer.style.height = `${spacerHeight + pageMargin}px`; // Add margin for clean break
+          spacer.style.width = '100%';
+          spacer.style.display = 'block';
+
+          // Insert spacer before the current child
+          clone.insertBefore(spacer, child);
+
+          // Reset current height for the new page (starting with this child)
+          currentHeight = childHeight;
+        } else {
+          currentHeight += childHeight;
+        }
+      });
+
+      // 4. Generate Image from the "Paginated" Clone
+      const canvas = await html2canvas(clone, {
+        scale: 2, // Higher quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 794 // Force capture width
+      });
+
+      // 5. Clean up DOM
+      document.body.removeChild(clone);
+
+      // 6. Generate PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // First page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Subsequent pages
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
 
-      console.log('✓ Health Insights data fetched successfully');
-      console.log('Generating HTML report...');
-
-      // Generate HTML report
-      const reportHtml = generateHealthReportHTML(healthInsightsData);
-
-      // Create blob and download
-      const blob = new Blob([reportHtml], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Althea-Health-Report-${new Date().toISOString().split('T')[0]}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      console.log('✓ Report downloaded successfully');
+      pdf.save(`Althea-Health-Report-${new Date().toISOString().split('T')[0]}.pdf`);
+      console.log('Report downloaded successfully');
 
     } catch (err: any) {
       console.error('✗ Error downloading report:', err);
@@ -312,7 +367,7 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         genetic: [] as any[],
         risk: [] as any[]
       };
-      
+
       if (Array.isArray(findings)) {
         findings.forEach(finding => {
           const cat = (finding.category || '').toLowerCase();
@@ -882,9 +937,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
   if (error) {
     return (
       <div className="space-y-6">
-        <div className={`p-6 rounded-xl flex items-start space-x-4 ${
-          darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
-        }`}>
+        <div className={`p-6 rounded-xl flex items-start space-x-4 ${darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
+          }`}>
           <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className={`font-semibold mb-2 ${darkMode ? 'text-red-400' : 'text-red-800'}`}>
@@ -898,9 +952,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
         <div className="flex justify-between">
           <button
             onClick={onBack}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-            }`}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+              }`}
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back</span>
@@ -953,352 +1006,349 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Brand Header - Matches Downloaded Report */}
-      <div className={`flex items-center justify-between p-5 rounded-xl border-2 ${
-        darkMode ? 'bg-gray-800 border-green-600' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-500'
-      }`}>
-        <div className="flex items-center space-x-4">
-          <img
-            src="/AltheaLogoGreen.jpg"
-            alt="Althea Logo"
-            className="h-16 w-16 object-contain"
-          />
-          <div>
-            <h1 className="text-3xl font-bold text-green-600">Althea</h1>
-            <p className="text-sm italic text-green-700">Your Personal Health Interpreter</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <h2 className={`text-lg font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            Health Insights Report
-          </h2>
-          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-          </p>
-        </div>
-      </div>
-
-      {/* Urgency Flag - Matches Report */}
-      {insights.urgency_flag && insights.urgency_flag !== 'none' && insights.urgency_flag !== 'routine' && (
-        <div className="p-4 rounded-lg border-2 border-red-500 bg-red-50">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+      <div ref={reportRef} className={`space-y-6 p-4 ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
+        {/* Brand Header - Matches Downloaded Report */}
+        <div className={`flex items-center justify-between p-5 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-green-600' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-500'
+          }`}>
+          <div className="flex items-center space-x-4">
+            <img
+              src="/AltheaLogoGreen.jpg"
+              alt="Althea Logo"
+              className="h-16 w-16 object-contain"
+            />
             <div>
-              <h4 className="text-red-800 font-bold uppercase text-sm mb-1">
-                URGENCY FLAG: {insights.urgency_flag.toUpperCase()}
-              </h4>
-              <p className="text-red-700 text-sm">
-                Some findings require timely medical attention. Please consult your healthcare provider promptly.
-              </p>
+              <h1 className="text-3xl font-bold text-green-600">Althea</h1>
+              <p className="text-sm italic text-green-700">Your Personal Health Interpreter</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Section 1: Enhanced Executive Summary */}
-      <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-        <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-          1. Executive Summary
-        </h2>
-
-        {insights.enhanced_summary && Object.keys(insights.enhanced_summary).length > 0 ? (
-          <div className="space-y-4">
-            {/* Greeting */}
-            {insights.enhanced_summary.greeting && (
-              <div className={`p-4 rounded-lg ${darkMode ? 'bg-green-900/20' : 'bg-green-50'}`}>
-                <p className={`text-lg font-medium ${darkMode ? 'text-green-300' : 'text-green-800'}`}>
-                  {insights.enhanced_summary.greeting}
-                </p>
-              </div>
-            )}
-
-            {/* Overall Health Status */}
-            {insights.enhanced_summary.overall_assessment && (
-              <div className={`p-4 rounded-lg border-l-4 border-blue-500 ${darkMode ? 'bg-gray-900/50' : 'bg-blue-50'}`}>
-                <h3 className={`font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-                  Overall Health Status
-                </h3>
-                <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-                  {insights.enhanced_summary.overall_assessment}
-                </p>
-              </div>
-            )}
-
-            {/* Body Response Pattern */}
-            {insights.enhanced_summary.body_response_pattern && (
-              <div className={`p-4 rounded-lg border-l-4 border-purple-500 ${darkMode ? 'bg-gray-900/50' : 'bg-purple-50'}`}>
-                <h3 className={`font-bold mb-2 ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>
-                  Body Response Pattern
-                </h3>
-                <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-                  {insights.enhanced_summary.body_response_pattern}
-                </p>
-              </div>
-            )}
-
-            {/* Positive Signs */}
-            {insights.enhanced_summary.positive_signs && insights.enhanced_summary.positive_signs.length > 0 && (
-              <div className={`p-4 rounded-lg border-l-4 border-green-500 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
-                <h3 className={`font-bold mb-2 ${darkMode ? 'text-green-400' : 'text-green-700'}`}>
-                  Positive Signs
-                </h3>
-                <ul className="space-y-2">
-                  {insights.enhanced_summary.positive_signs.map((sign: string, idx: number) => (
-                    <li key={idx} className={`flex items-start space-x-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                      <span>{sign}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Health Story Context */}
-            {insights.enhanced_summary.health_story_context && (
-              <div className={`p-4 rounded-lg border-l-4 border-teal-500 ${darkMode ? 'bg-gray-900/50' : 'bg-teal-50'}`}>
-                <h3 className={`font-bold mb-2 ${darkMode ? 'text-teal-400' : 'text-teal-700'}`}>
-                  What This Means for You
-                </h3>
-                <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-                  {insights.enhanced_summary.health_story_context}
-                </p>
-              </div>
-            )}
-
-            {/* Key Message */}
-            {insights.enhanced_summary.key_message && (
-              <div className={`p-4 rounded-lg text-center ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                <p className={`text-base italic font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {insights.enhanced_summary.key_message}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Fallback to basic summary */
-          <div className={`p-5 rounded-lg border-l-4 border-green-600 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
-            <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
-              {insights.summary}
+          <div className="text-right">
+            <h2 className={`text-lg font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Health Insights Report
+            </h2>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
+          </div>
+        </div>
+
+        {/* Urgency Flag - Matches Report */}
+        {insights.urgency_flag && insights.urgency_flag !== 'none' && insights.urgency_flag !== 'routine' && (
+          <div className="p-4 rounded-lg border-2 border-red-500 bg-red-50">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-red-800 font-bold uppercase text-sm mb-1">
+                  URGENCY FLAG: {insights.urgency_flag.toUpperCase()}
+                </h4>
+                <p className="text-red-700 text-sm">
+                  Some findings require timely medical attention. Please consult your healthcare provider promptly.
+                </p>
+              </div>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Section 2: Key Findings by Category */}
-      {(categorizedFindings.genetic.length > 0 || categorizedFindings.lifestyle.length > 0 || categorizedFindings.riskFactors.length > 0) && (
+        {/* Section 1: Enhanced Executive Summary */}
         <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-            2. Key Findings by Category
+            1. Executive Summary
           </h2>
 
-          {categorizedFindings.genetic.length > 0 && (
-            <div className="mb-6">
-              <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                Genetic & Hereditary Factors
-              </h3>
-              <div className="space-y-3">
-                {categorizedFindings.genetic.map((finding: any, idx: number) => (
-                  <div key={idx} className={`p-4 rounded-lg border-l-3 border-blue-500 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                    <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Finding:</strong> {finding.finding}
-                    </p>
-                    <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Significance:</strong> {finding.significance}
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Action:</strong> {finding.action_needed}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {categorizedFindings.lifestyle.length > 0 && (
-            <div className="mb-6">
-              <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
-                Lifestyle Factors
-              </h3>
-              <div className="space-y-3">
-                {categorizedFindings.lifestyle.map((finding: any, idx: number) => (
-                  <div key={idx} className={`p-4 rounded-lg border-l-3 border-green-500 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                    <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Finding:</strong> {finding.finding}
-                    </p>
-                    <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Significance:</strong> {finding.significance}
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Action:</strong> {finding.action_needed}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {categorizedFindings.riskFactors.length > 0 && (
-            <div>
-              <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
-                Risk Factors
-              </h3>
-              <div className="space-y-3">
-                {categorizedFindings.riskFactors.map((finding: any, idx: number) => (
-                  <div key={idx} className={`p-4 rounded-lg border-l-3 border-red-500 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                    <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Finding:</strong> {finding.finding}
-                    </p>
-                    <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Significance:</strong> {finding.significance}
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <strong>Action:</strong> {finding.action_needed}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Section 3: Abnormal Values Analysis */}
-      {insights.abnormal_values && insights.abnormal_values.length > 0 && (
-        <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-            3. Abnormal Values Analysis
-          </h2>
-          <div className="space-y-4">
-            {insights.abnormal_values.map((test, idx) => (
-              <div key={idx} className={`p-4 rounded-lg border-l-4 ${
-                test.status === 'CRITICAL' ? 'border-red-600 bg-red-50' :
-                test.status === 'HIGH' ? 'border-orange-500 bg-orange-50' :
-                'border-yellow-500 bg-yellow-50'
-              }`}>
-                <h4 className="font-bold text-gray-900 mb-3">{test.test_name}</h4>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <span className="font-semibold text-gray-700">Your Value:</span>
-                    <p className="text-gray-900">{test.value}</p>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-700">Reference Range:</span>
-                    <p className="text-gray-900">{test.normal_range}</p>
-                  </div>
+          {insights.enhanced_summary && Object.keys(insights.enhanced_summary).length > 0 ? (
+            <div className="space-y-4">
+              {/* Greeting */}
+              {insights.enhanced_summary.greeting && (
+                <div className={`p-4 rounded-lg ${darkMode ? 'bg-green-900/20' : 'bg-green-50'}`}>
+                  <p className={`text-lg font-medium ${darkMode ? 'text-green-300' : 'text-green-800'}`}>
+                    {insights.enhanced_summary.greeting}
+                  </p>
                 </div>
-                <p className="text-sm text-gray-800"><strong>Clinical Explanation:</strong> {test.explanation}</p>
-                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${
-                  test.status === 'CRITICAL' ? 'bg-red-200 text-red-900' :
-                  test.status === 'HIGH' ? 'bg-orange-200 text-orange-900' :
-                  'bg-yellow-200 text-yellow-900'
-                }`}>
-                  {test.status} Priority
-                </span>
+              )}
+
+              {/* Overall Health Status */}
+              {insights.enhanced_summary.overall_assessment && (
+                <div className={`p-4 rounded-lg border-l-4 border-blue-500 ${darkMode ? 'bg-gray-900/50' : 'bg-blue-50'}`}>
+                  <h3 className={`font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
+                    Overall Health Status
+                  </h3>
+                  <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    {insights.enhanced_summary.overall_assessment}
+                  </p>
+                </div>
+              )}
+
+              {/* Body Response Pattern */}
+              {insights.enhanced_summary.body_response_pattern && (
+                <div className={`p-4 rounded-lg border-l-4 border-purple-500 ${darkMode ? 'bg-gray-900/50' : 'bg-purple-50'}`}>
+                  <h3 className={`font-bold mb-2 ${darkMode ? 'text-purple-400' : 'text-purple-700'}`}>
+                    Body Response Pattern
+                  </h3>
+                  <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    {insights.enhanced_summary.body_response_pattern}
+                  </p>
+                </div>
+              )}
+
+              {/* Positive Signs */}
+              {insights.enhanced_summary.positive_signs && insights.enhanced_summary.positive_signs.length > 0 && (
+                <div className={`p-4 rounded-lg border-l-4 border-green-500 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
+                  <h3 className={`font-bold mb-2 ${darkMode ? 'text-green-400' : 'text-green-700'}`}>
+                    Positive Signs
+                  </h3>
+                  <ul className="space-y-2">
+                    {insights.enhanced_summary.positive_signs.map((sign: string, idx: number) => (
+                      <li key={idx} className={`flex items-start space-x-2 ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <span>{sign}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Health Story Context */}
+              {insights.enhanced_summary.health_story_context && (
+                <div className={`p-4 rounded-lg border-l-4 border-teal-500 ${darkMode ? 'bg-gray-900/50' : 'bg-teal-50'}`}>
+                  <h3 className={`font-bold mb-2 ${darkMode ? 'text-teal-400' : 'text-teal-700'}`}>
+                    What This Means for You
+                  </h3>
+                  <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    {insights.enhanced_summary.health_story_context}
+                  </p>
+                </div>
+              )}
+
+              {/* Key Message */}
+              {insights.enhanced_summary.key_message && (
+                <div className={`p-4 rounded-lg text-center ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                  <p className={`text-base italic font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {insights.enhanced_summary.key_message}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Fallback to basic summary */
+            <div className={`p-5 rounded-lg border-l-4 border-green-600 ${darkMode ? 'bg-gray-900/50' : 'bg-green-50'}`}>
+              <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                {insights.summary}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Key Findings by Category */}
+        {(categorizedFindings.genetic.length > 0 || categorizedFindings.lifestyle.length > 0 || categorizedFindings.riskFactors.length > 0) && (
+          <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
+              2. Key Findings by Category
+            </h2>
+
+            {categorizedFindings.genetic.length > 0 && (
+              <div className="mb-6">
+                <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                  Genetic & Hereditary Factors
+                </h3>
+                <div className="space-y-3">
+                  {categorizedFindings.genetic.map((finding: any, idx: number) => (
+                    <div key={idx} className={`p-4 rounded-lg border-l-3 border-blue-500 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                      <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Finding:</strong> {finding.finding}
+                      </p>
+                      <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Significance:</strong> {finding.significance}
+                      </p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Action:</strong> {finding.action_needed}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Section 4: Personalized Health Recommendations */}
-      {insights.health_recommendations && insights.health_recommendations.length > 0 && (
-        <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-            4. Personalized Health Recommendations
-          </h2>
-          <div className="space-y-4">
-            {insights.health_recommendations.map((rec, idx) => (
-              <div key={idx} className={`p-4 rounded-lg border-l-4 ${
-                rec.priority === 'high' ? 'border-red-500 bg-red-50' :
-                rec.priority === 'medium' ? 'border-yellow-500 bg-yellow-50' :
-                'border-blue-500 bg-blue-50'
-              }`}>
-                <strong className="text-gray-900">{idx + 1}. {rec.recommendation}</strong>
-                <span className={`inline-block mt-2 ml-2 px-3 py-1 rounded-full text-xs font-bold ${
-                  rec.priority === 'high' ? 'bg-red-200 text-red-900' :
-                  rec.priority === 'medium' ? 'bg-yellow-200 text-yellow-900' :
-                  'bg-blue-200 text-blue-900'
-                }`}>
-                  {rec.priority} Priority
-                </span>
+            {categorizedFindings.lifestyle.length > 0 && (
+              <div className="mb-6">
+                <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+                  Lifestyle Factors
+                </h3>
+                <div className="space-y-3">
+                  {categorizedFindings.lifestyle.map((finding: any, idx: number) => (
+                    <div key={idx} className={`p-4 rounded-lg border-l-3 border-green-500 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                      <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Finding:</strong> {finding.finding}
+                      </p>
+                      <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Significance:</strong> {finding.significance}
+                      </p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Action:</strong> {finding.action_needed}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Section 5: Family Screening Suggestions */}
-      {insights.family_screening_suggestions && insights.family_screening_suggestions.length > 0 && (
-        <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-            5. Family Screening Suggestions
-          </h2>
-          <div className="space-y-4">
-            {insights.family_screening_suggestions.map((suggestion, idx) => (
-              <div key={idx} className="p-4 rounded-lg border-l-4 border-purple-500 bg-purple-50">
-                <h4 className="font-bold text-gray-900 mb-2">{suggestion.condition}</h4>
-                <p className="text-sm text-gray-800 mb-1">
-                  <strong>Recommendation:</strong> {suggestion.reason}
-                </p>
-                <p className="text-sm text-gray-800">
-                  <strong>Family Members:</strong> {suggestion.who_should_screen}
-                </p>
+            {categorizedFindings.riskFactors.length > 0 && (
+              <div>
+                <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
+                  Risk Factors
+                </h3>
+                <div className="space-y-3">
+                  {categorizedFindings.riskFactors.map((finding: any, idx: number) => (
+                    <div key={idx} className={`p-4 rounded-lg border-l-3 border-red-500 ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                      <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Finding:</strong> {finding.finding}
+                      </p>
+                      <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Significance:</strong> {finding.significance}
+                      </p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <strong>Action:</strong> {finding.action_needed}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Section 6: Follow-up Timeline */}
-      {insights.follow_up_timeline && (
-        <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-            6. Follow-up Timeline
-          </h2>
-          <div className="p-5 rounded-lg border-l-4 border-teal-500 bg-teal-50">
-            <p className="text-base text-gray-800 leading-relaxed">
-              {insights.follow_up_timeline}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Section 7: AI Health Insights (Questions) */}
-      {insights.questions_for_doctor && insights.questions_for_doctor.length > 0 && (
-        <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
-            7. AI Health Insights (Step 3 Analysis)
-          </h2>
-          <div className="p-5 rounded-lg border-l-4 border-purple-500 bg-purple-50 mb-4">
-            <h3 className="text-lg font-bold text-purple-800 mb-3">Questions for Your Doctor</h3>
-            <div className="space-y-3">
-              {insights.questions_for_doctor.map((question, idx) => (
-                <div key={idx} className="flex items-start space-x-3 p-3 rounded-lg bg-white">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-bold">
-                    {idx + 1}
+        {/* Section 3: Abnormal Values Analysis */}
+        {insights.abnormal_values && insights.abnormal_values.length > 0 && (
+          <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
+              3. Abnormal Values Analysis
+            </h2>
+            <div className="space-y-4">
+              {insights.abnormal_values.map((test, idx) => (
+                <div key={idx} className={`p-4 rounded-lg border-l-4 ${test.status === 'CRITICAL' ? 'border-red-600 bg-red-50' :
+                  test.status === 'HIGH' ? 'border-orange-500 bg-orange-50' :
+                    'border-yellow-500 bg-yellow-50'
+                  }`}>
+                  <h4 className="font-bold text-gray-900 mb-3">{test.test_name}</h4>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <span className="font-semibold text-gray-700">Your Value:</span>
+                      <p className="text-gray-900">{test.value}</p>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-700">Reference Range:</span>
+                      <p className="text-gray-900">{test.normal_range}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-800"><strong>Clinical Explanation:</strong> {test.explanation}</p>
+                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${test.status === 'CRITICAL' ? 'bg-red-200 text-red-900' :
+                    test.status === 'HIGH' ? 'bg-orange-200 text-orange-900' :
+                      'bg-yellow-200 text-yellow-900'
+                    }`}>
+                    {test.status} Priority
                   </span>
-                  <p className="text-sm text-gray-800 flex-1">{question}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className={`p-4 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'}`}>
-        <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-800'}`}>
-          <strong>Disclaimer:</strong> These insights are for informational purposes only and do not constitute medical advice.
-          Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.
-        </p>
+        {/* Section 4: Personalized Health Recommendations */}
+        {insights.health_recommendations && insights.health_recommendations.length > 0 && (
+          <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
+              4. Personalized Health Recommendations
+            </h2>
+            <div className="space-y-4">
+              {insights.health_recommendations.map((rec, idx) => (
+                <div key={idx} className={`p-4 rounded-lg border-l-4 ${rec.priority === 'high' ? 'border-red-500 bg-red-50' :
+                  rec.priority === 'medium' ? 'border-yellow-500 bg-yellow-50' :
+                    'border-blue-500 bg-blue-50'
+                  }`}>
+                  <strong className="text-gray-900">{idx + 1}. {rec.recommendation}</strong>
+                  <span className={`inline-block mt-2 ml-2 px-3 py-1 rounded-full text-xs font-bold ${rec.priority === 'high' ? 'bg-red-200 text-red-900' :
+                    rec.priority === 'medium' ? 'bg-yellow-200 text-yellow-900' :
+                      'bg-blue-200 text-blue-900'
+                    }`}>
+                    {rec.priority} Priority
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Section 5: Family Screening Suggestions */}
+        {insights.family_screening_suggestions && insights.family_screening_suggestions.length > 0 && (
+          <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
+              5. Family Screening Suggestions
+            </h2>
+            <div className="space-y-4">
+              {insights.family_screening_suggestions.map((suggestion, idx) => (
+                <div key={idx} className="p-4 rounded-lg border-l-4 border-purple-500 bg-purple-50">
+                  <h4 className="font-bold text-gray-900 mb-2">{suggestion.condition}</h4>
+                  <p className="text-sm text-gray-800 mb-1">
+                    <strong>Recommendation:</strong> {suggestion.reason}
+                  </p>
+                  <p className="text-sm text-gray-800">
+                    <strong>Family Members:</strong> {suggestion.who_should_screen}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Section 6: Follow-up Timeline */}
+        {insights.follow_up_timeline && (
+          <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
+              6. Follow-up Timeline
+            </h2>
+            <div className="p-5 rounded-lg border-l-4 border-teal-500 bg-teal-50">
+              <p className="text-base text-gray-800 leading-relaxed">
+                {insights.follow_up_timeline}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Section 7: AI Health Insights (Questions) */}
+        {insights.questions_for_doctor && insights.questions_for_doctor.length > 0 && (
+          <div className={`p-6 rounded-xl border-2 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold mb-4 pb-3 border-b-2 ${darkMode ? 'text-green-400 border-gray-700' : 'text-green-600 border-gray-200'}`}>
+              7. AI Health Insights (Step 3 Analysis)
+            </h2>
+            <div className="p-5 rounded-lg border-l-4 border-purple-500 bg-purple-50 mb-4">
+              <h3 className="text-lg font-bold text-purple-800 mb-3">Questions for Your Doctor</h3>
+              <div className="space-y-3">
+                {insights.questions_for_doctor.map((question, idx) => (
+                  <div key={idx} className="flex items-start space-x-3 p-3 rounded-lg bg-white">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-bold">
+                      {idx + 1}
+                    </span>
+                    <p className="text-sm text-gray-800 flex-1">{question}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`p-4 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'}`}>
+          <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-800'}`}>
+            <strong>Disclaimer:</strong> These insights are for informational purposes only and do not constitute medical advice.
+            Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.
+          </p>
+        </div>
+
       </div>
 
       {/* Simplified Action Bar - Unified Download Button */}
       <div className="flex justify-between pt-4">
         <button
           onClick={onBack}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-            darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-          }`}
+          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+            }`}
         >
           <ArrowLeft className="w-5 h-5" />
           <span>Back</span>
@@ -1309,13 +1359,12 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           <button
             onClick={handleViewHealthInsightsTable}
             disabled={generatingReport}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              generatingReport
-                ? 'bg-gray-400 cursor-not-allowed'
-                : darkMode
-                  ? 'bg-gray-700 text-white hover:bg-gray-600'
-                  : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-            }`}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${generatingReport
+              ? 'bg-gray-400 cursor-not-allowed'
+              : darkMode
+                ? 'bg-gray-700 text-white hover:bg-gray-600'
+                : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+              }`}
             title="View your Health Insights Report data in table format"
           >
             {generatingReport ? (
@@ -1335,11 +1384,10 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
           <button
             onClick={handleDownloadReport}
             disabled={generatingReport}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              generatingReport
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${generatingReport
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
             title="Download your Health Insights Report as HTML"
           >
             {generatingReport ? (
@@ -1368,21 +1416,18 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
       {/* Health Insights Data Table Modal */}
       {showDataTable && tableData && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className={`max-w-6xl w-full max-h-[90vh] overflow-auto rounded-xl ${
-            darkMode ? 'bg-gray-800' : 'bg-white'
-          } shadow-2xl`}>
+          <div className={`max-w-6xl w-full max-h-[90vh] overflow-auto rounded-xl ${darkMode ? 'bg-gray-800' : 'bg-white'
+            } shadow-2xl`}>
             {/* Modal Header */}
-            <div className={`sticky top-0 z-10 flex items-center justify-between p-6 border-b ${
-              darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-            }`}>
+            <div className={`sticky top-0 z-10 flex items-center justify-between p-6 border-b ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+              }`}>
               <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Health Insights Report Data
               </h2>
               <button
                 onClick={() => setShowDataTable(false)}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-                }`}
+                className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                  }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1393,15 +1438,13 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               {/* Executive Summary Section */}
               {tableData.executive_summary && (
                 <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
-                    darkMode ? 'text-green-400' : 'text-green-700'
-                  }`}>
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${darkMode ? 'text-green-400' : 'text-green-700'
+                    }`}>
                     <Brain className="w-5 h-5 mr-2" />
                     Executive Summary
                   </h3>
-                  <div className={`p-4 rounded-lg ${
-                    darkMode ? 'bg-gray-700/50' : 'bg-green-50'
-                  }`}>
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-green-50'
+                    }`}>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       {tableData.executive_summary}
                     </p>
@@ -1412,14 +1455,12 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               {/* Greeting Section */}
               {tableData.greeting && (
                 <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-3 ${
-                    darkMode ? 'text-green-400' : 'text-green-700'
-                  }`}>
+                  <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-green-400' : 'text-green-700'
+                    }`}>
                     Greeting
                   </h3>
-                  <div className={`p-4 rounded-lg ${
-                    darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
-                  }`}>
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+                    }`}>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       {tableData.greeting}
                     </p>
@@ -1430,53 +1471,44 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               {/* Detailed Findings Table */}
               {tableData.detailed_findings && (
                 <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
-                    darkMode ? 'text-green-400' : 'text-green-700'
-                  }`}>
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${darkMode ? 'text-green-400' : 'text-green-700'
+                    }`}>
                     <AlertTriangle className="w-5 h-5 mr-2" />
                     Detailed Findings
                   </h3>
                   <div className="overflow-x-auto">
-                    <table className={`w-full border-collapse ${
-                      darkMode ? 'border-gray-700' : 'border-gray-200'
-                    }`}>
+                    <table className={`w-full border-collapse ${darkMode ? 'border-gray-700' : 'border-gray-200'
+                      }`}>
                       <thead>
                         <tr className={darkMode ? 'bg-gray-700' : 'bg-green-100'}>
-                          <th className={`p-3 text-left text-sm font-semibold ${
-                            darkMode ? 'text-gray-200' : 'text-gray-700'
-                          }`}>
+                          <th className={`p-3 text-left text-sm font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-700'
+                            }`}>
                             Category
                           </th>
-                          <th className={`p-3 text-left text-sm font-semibold ${
-                            darkMode ? 'text-gray-200' : 'text-gray-700'
-                          }`}>
+                          <th className={`p-3 text-left text-sm font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-700'
+                            }`}>
                             Finding
                           </th>
-                          <th className={`p-3 text-left text-sm font-semibold ${
-                            darkMode ? 'text-gray-200' : 'text-gray-700'
-                          }`}>
+                          <th className={`p-3 text-left text-sm font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-700'
+                            }`}>
                             Significance
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         {Array.isArray(tableData.detailed_findings) && tableData.detailed_findings.map((finding: any, idx: number) => (
-                          <tr key={idx} className={`border-t ${
-                            darkMode ? 'border-gray-700' : 'border-gray-200'
-                          }`}>
-                            <td className={`p-3 text-sm font-medium ${
-                              darkMode ? 'text-gray-300' : 'text-gray-900'
+                          <tr key={idx} className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'
                             }`}>
+                            <td className={`p-3 text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-900'
+                              }`}>
                               {finding.category || 'N/A'}
                             </td>
-                            <td className={`p-3 text-sm ${
-                              darkMode ? 'text-gray-400' : 'text-gray-700'
-                            }`}>
+                            <td className={`p-3 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-700'
+                              }`}>
                               {finding.finding || 'N/A'}
                             </td>
-                            <td className={`p-3 text-sm ${
-                              darkMode ? 'text-gray-400' : 'text-gray-700'
-                            }`}>
+                            <td className={`p-3 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-700'
+                              }`}>
                               {finding.significance || 'N/A'}
                             </td>
                           </tr>
@@ -1490,18 +1522,15 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               {/* Trend Analysis Table */}
               {tableData.trend_analysis && (
                 <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
-                    darkMode ? 'text-green-400' : 'text-green-700'
-                  }`}>
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${darkMode ? 'text-green-400' : 'text-green-700'
+                    }`}>
                     <TrendingUp className="w-5 h-5 mr-2" />
                     Trend Analysis
                   </h3>
-                  <div className={`p-4 rounded-lg ${
-                    darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
-                  }`}>
-                    <pre className={`text-sm whitespace-pre-wrap ${
-                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
                     }`}>
+                    <pre className={`text-sm whitespace-pre-wrap ${darkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                       {JSON.stringify(tableData.trend_analysis, null, 2)}
                     </pre>
                   </div>
@@ -1511,20 +1540,17 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               {/* Questions for Doctor */}
               {tableData.doctor_questions && tableData.doctor_questions.length > 0 && (
                 <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
-                    darkMode ? 'text-green-400' : 'text-green-700'
-                  }`}>
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${darkMode ? 'text-green-400' : 'text-green-700'
+                    }`}>
                     <MessageCircle className="w-5 h-5 mr-2" />
                     Questions for Your Doctor
                   </h3>
                   <div className="space-y-2">
                     {tableData.doctor_questions.map((question: string, idx: number) => (
-                      <div key={idx} className={`p-3 rounded-lg flex items-start ${
-                        darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
-                      }`}>
-                        <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
-                          darkMode ? 'bg-green-600 text-white' : 'bg-green-500 text-white'
+                      <div key={idx} className={`p-3 rounded-lg flex items-start ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
                         }`}>
+                        <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${darkMode ? 'bg-green-600 text-white' : 'bg-green-500 text-white'
+                          }`}>
                           {idx + 1}
                         </span>
                         <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1539,15 +1565,13 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               {/* Next Steps */}
               {tableData.next_steps && (
                 <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${
-                    darkMode ? 'text-green-400' : 'text-green-700'
-                  }`}>
+                  <h3 className={`text-lg font-semibold mb-3 flex items-center ${darkMode ? 'text-green-400' : 'text-green-700'
+                    }`}>
                     <Lightbulb className="w-5 h-5 mr-2" />
                     Next Steps
                   </h3>
-                  <div className={`p-4 rounded-lg ${
-                    darkMode ? 'bg-gray-700/50' : 'bg-blue-50'
-                  }`}>
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-blue-50'
+                    }`}>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       {tableData.next_steps}
                     </p>
@@ -1556,12 +1580,10 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
               )}
 
               {/* Metadata Information */}
-              <div className={`mt-6 p-4 rounded-lg border ${
-                darkMode ? 'bg-gray-700/30 border-gray-700' : 'bg-gray-50 border-gray-200'
-              }`}>
-                <h3 className={`text-sm font-semibold mb-2 ${
-                  darkMode ? 'text-gray-300' : 'text-gray-700'
+              <div className={`mt-6 p-4 rounded-lg border ${darkMode ? 'bg-gray-700/30 border-gray-700' : 'bg-gray-50 border-gray-200'
                 }`}>
+                <h3 className={`text-sm font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
                   Report Metadata
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -1602,9 +1624,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
 
               {/* Disclaimer */}
               {tableData.disclaimer && (
-                <div className={`mt-6 p-4 rounded-lg ${
-                  darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'
-                }`}>
+                <div className={`mt-6 p-4 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'
+                  }`}>
                   <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-800'}`}>
                     <strong>Disclaimer:</strong> {tableData.disclaimer}
                   </p>
@@ -1613,9 +1634,8 @@ export const HealthInsights: React.FC<HealthInsightsProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className={`sticky bottom-0 flex justify-end p-6 border-t ${
-              darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-            }`}>
+            <div className={`sticky bottom-0 flex justify-end p-6 border-t ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+              }`}>
               <button
                 onClick={() => setShowDataTable(false)}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"

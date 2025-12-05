@@ -4,6 +4,8 @@ import {
   TrendingUp, Users, Calendar, Download, MessageCircle, Activity,
   Lightbulb, FileText, RefreshCw, Sliders, Sparkles
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
 
 interface UnifiedHealthInsightsProps {
@@ -77,6 +79,7 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
   // Report caching state
   const [reportStoragePath, setReportStoragePath] = useState<string | null>(null);
   const [reportCached, setReportCached] = useState(false);
+  const reportRef = React.useRef<HTMLDivElement>(null);
 
   const toneOptions: ToneOption[] = [
     {
@@ -275,73 +278,45 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
       setGeneratingReport(true);
       setError(null);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      let storagePath = reportStoragePath;
-
-      // If report is not cached, generate it
-      if (!reportCached) {
-        console.log('Generating report for session:', sessionId);
-
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-health-report`;
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sessionId,
-            reportType: 'comprehensive',
-            includeQuestions: true,
-            tone,
-            languageLevel
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to generate report');
-        }
-
-        const result = await response.json();
-        console.log('Report result:', result.cached ? 'Using cached report' : 'Generated new report');
-
-        if (result.storage_path) {
-          storagePath = result.storage_path;
-          setReportStoragePath(storagePath);
-          setReportCached(true);
-        } else {
-          throw new Error('No storage path returned from report generation');
-        }
-      } else {
-        console.log('Using cached report:', storagePath);
+      if (!reportRef.current) {
+        throw new Error('Report content not found');
       }
 
-      // Download the report from storage
-      if (storagePath) {
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('health-reports')
-          .download(storagePath);
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2, // Higher scale for better resolution
+        useCORS: true, // Enable CORS for images
+        logging: false,
+        backgroundColor: '#ffffff' // Ensure white background
+      });
 
-        if (downloadError) throw new Error('Failed to download report: ' + downloadError.message);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
 
-        if (fileData) {
-          const url = window.URL.createObjectURL(fileData);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `althea-health-report-${sessionId.substring(0, 8)}.html`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-          console.log('Report downloaded successfully');
-        }
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
+
+      pdf.save(`Althea-Health-Report-${sessionId.substring(0, 8)}.pdf`);
+      console.log('Report downloaded successfully');
+
     } catch (err: any) {
-      console.error('Error with report:', err);
+      console.error('Error generating PDF report:', err);
       setError(err.message);
     } finally {
       setGeneratingReport(false);
@@ -393,9 +368,8 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
   if (error) {
     return (
       <div className="space-y-6">
-        <div className={`p-6 rounded-xl flex items-start space-x-4 ${
-          darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
-        }`}>
+        <div className={`p-6 rounded-xl flex items-start space-x-4 ${darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
+          }`}>
           <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className={`font-semibold mb-2 ${darkMode ? 'text-red-400' : 'text-red-800'}`}>
@@ -409,9 +383,8 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
         <div className="flex justify-between">
           <button
             onClick={onBack}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-            }`}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+              }`}
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back</span>
@@ -440,356 +413,350 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header with Logo and Preferences */}
-      <div className={`sticky top-0 z-10 ${darkMode ? 'bg-gray-900/95' : 'bg-white/95'} backdrop-blur-md pb-4 border-b ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <img
-              src="/AltheaLogoGreen.jpg"
-              alt="Althea Logo"
-              className="h-12 w-12 object-contain"
-            />
-            <div>
-              <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Your Health Insights & Report
-              </h2>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                AI-powered analysis by Althea
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowPreferences(!showPreferences)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            <span>Customize</span>
-          </button>
-        </div>
-
-        {/* Preference Controls */}
-        {showPreferences && (
-          <div className={`p-4 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-gray-50 border border-gray-200'}`}>
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Tone Selection */}
+      <div ref={reportRef} className={`space-y-6 p-4 ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
+        {/* Header with Logo and Preferences */}
+        <div className={`sticky top-0 z-10 ${darkMode ? 'bg-gray-900/95' : 'bg-white/95'} backdrop-blur-md pb-4 border-b ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-4">
+              <img
+                src="/AltheaLogoGreen.jpg"
+                alt="Althea Logo"
+                className="h-12 w-12 object-contain"
+              />
               <div>
-                <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Communication Tone
-                </label>
-                <div className="space-y-2">
-                  {toneOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleToneChange(option.value)}
-                      className={`w-full flex items-start space-x-3 p-3 rounded-lg border-2 transition-all ${
-                        tone === option.value
-                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                          : darkMode
-                          ? 'border-gray-700 hover:border-gray-600 bg-gray-900/50'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      <span className="text-2xl">{option.icon}</span>
-                      <div className="flex-1 text-left">
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {option.label}
-                        </p>
-                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {option.description}
-                        </p>
-                      </div>
-                      {tone === option.value && (
-                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Language Level Selection */}
-              <div>
-                <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Language Level
-                </label>
-                <div className="space-y-2">
-                  {languageOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleLanguageChange(option.value)}
-                      className={`w-full flex items-start space-x-3 p-3 rounded-lg border-2 transition-all ${
-                        languageLevel === option.value
-                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                          : darkMode
-                          ? 'border-gray-700 hover:border-gray-600 bg-gray-900/50'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      <div className="flex-1 text-left">
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {option.label}
-                        </p>
-                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {option.description}
-                        </p>
-                      </div>
-                      {languageLevel === option.value && (
-                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {hasUnsavedChanges && (
-              <div className="mt-4 flex items-center justify-end space-x-3">
+                <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Your Health Insights & Report
+                </h2>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Changes not applied yet
+                  AI-powered analysis by Althea
                 </p>
-                <button
-                  onClick={handleRegenerate}
-                  className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Apply & Regenerate</span>
-                </button>
               </div>
-            )}
+            </div>
+            <button
+              onClick={() => setShowPreferences(!showPreferences)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+            >
+              <Sliders className="w-4 h-4" />
+              <span>Customize</span>
+            </button>
           </div>
-        )}
 
-        {/* Current Settings Display */}
-        {!showPreferences && (
-          <div className="flex items-center space-x-4 mt-3">
-            <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Current style:
-            </span>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-            }`}>
-              {toneOptions.find(t => t.value === tone)?.label}
-            </span>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
-            }`}>
-              {languageOptions.find(l => l.value === languageLevel)?.label}
-            </span>
-          </div>
-        )}
-      </div>
+          {/* Preference Controls */}
+          {showPreferences && (
+            <div className={`p-4 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-gray-50 border border-gray-200'}`}>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Tone Selection */}
+                <div>
+                  <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Communication Tone
+                  </label>
+                  <div className="space-y-2">
+                    {toneOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleToneChange(option.value)}
+                        className={`w-full flex items-start space-x-3 p-3 rounded-lg border-2 transition-all ${tone === option.value
+                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                            : darkMode
+                              ? 'border-gray-700 hover:border-gray-600 bg-gray-900/50'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
+                          }`}
+                      >
+                        <span className="text-2xl">{option.icon}</span>
+                        <div className="flex-1 text-left">
+                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {option.label}
+                          </p>
+                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {option.description}
+                          </p>
+                        </div>
+                        {tone === option.value && (
+                          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-      {/* Urgency Flag */}
-      {insights.urgency_flag && insights.urgency_flag !== 'none' && (
-        <div className={`p-4 rounded-xl border-2 ${getUrgencyColor(insights.urgency_flag)}`}>
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-6 h-6 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold uppercase text-sm mb-1">
-                {insights.urgency_flag} ATTENTION REQUIRED
-              </p>
-              <p className="text-sm">
-                Some findings require timely medical attention. Please consult your healthcare provider.
-              </p>
+                {/* Language Level Selection */}
+                <div>
+                  <label className={`block text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Language Level
+                  </label>
+                  <div className="space-y-2">
+                    {languageOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleLanguageChange(option.value)}
+                        className={`w-full flex items-start space-x-3 p-3 rounded-lg border-2 transition-all ${languageLevel === option.value
+                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                            : darkMode
+                              ? 'border-gray-700 hover:border-gray-600 bg-gray-900/50'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
+                          }`}
+                      >
+                        <div className="flex-1 text-left">
+                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {option.label}
+                          </p>
+                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {option.description}
+                          </p>
+                        </div>
+                        {languageLevel === option.value && (
+                          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {hasUnsavedChanges && (
+                <div className="mt-4 flex items-center justify-end space-x-3">
+                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Changes not applied yet
+                  </p>
+                  <button
+                    onClick={handleRegenerate}
+                    className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Apply & Regenerate</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Current Settings Display */}
+          {!showPreferences && (
+            <div className="flex items-center space-x-4 mt-3">
+              <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Current style:
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                }`}>
+                {toneOptions.find(t => t.value === tone)?.label}
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                }`}>
+                {languageOptions.find(l => l.value === languageLevel)?.label}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Urgency Flag */}
+        {insights.urgency_flag && insights.urgency_flag !== 'none' && (
+          <div className={`p-4 rounded-xl border-2 ${getUrgencyColor(insights.urgency_flag)}`}>
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-6 h-6 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold uppercase text-sm mb-1">
+                  {insights.urgency_flag} ATTENTION REQUIRED
+                </p>
+                <p className="text-sm">
+                  Some findings require timely medical attention. Please consult your healthcare provider.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Summary Section */}
-      <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-        <div className="flex items-center space-x-3 mb-4">
-          <Brain className="w-6 h-6 text-purple-600" />
-          <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-            Summary
-          </h3>
-        </div>
-        <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          {insights.summary}
-        </p>
-      </div>
-
-      {/* Key Findings */}
-      {insights.key_findings && insights.key_findings.length > 0 && (
+        {/* Summary Section */}
         <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
           <div className="flex items-center space-x-3 mb-4">
-            <Activity className="w-6 h-6 text-blue-600" />
+            <Brain className="w-6 h-6 text-purple-600" />
             <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Key Findings
+              Summary
             </h3>
           </div>
-          <div className="space-y-4">
-            {insights.key_findings.map((finding, idx) => (
-              <div key={idx} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                <h4 className={`font-semibold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                  {finding.category}
-                </h4>
-                <p className={`text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="font-medium">Finding:</span> {finding.finding}
-                </p>
-                <p className={`text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="font-medium">Significance:</span> {finding.significance}
-                </p>
-                <p className={`text-sm ${darkMode ? 'text-green-400' : 'text-green-700'}`}>
-                  <span className="font-medium">Action:</span> {finding.action_needed}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Abnormal Values */}
-      {insights.abnormal_values && insights.abnormal_values.length > 0 && (
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <div className="flex items-center space-x-3 mb-4">
-            <TrendingUp className="w-6 h-6 text-orange-600" />
-            <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Values Outside Normal Range
-            </h3>
-          </div>
-          <div className="space-y-3">
-            {insights.abnormal_values.map((test, idx) => (
-              <div key={idx} className={`p-4 rounded-lg border-l-4 ${
-                test.status === 'CRITICAL' ? 'border-red-600 bg-red-50 dark:bg-red-900/20' :
-                test.status === 'HIGH' ? 'border-orange-600 bg-orange-50 dark:bg-orange-900/20' :
-                'border-yellow-600 bg-yellow-50 dark:bg-yellow-900/20'
-              }`}>
-                <div className="flex items-start justify-between mb-2">
-                  <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {test.test_name}
-                  </h4>
-                  <span className={`text-xs font-bold px-2 py-1 rounded ${
-                    test.status === 'CRITICAL' ? 'bg-red-600 text-white' :
-                    test.status === 'HIGH' ? 'bg-orange-600 text-white' :
-                    'bg-yellow-600 text-white'
-                  }`}>
-                    {test.status}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-2 text-sm">
-                  <div>
-                    <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Your Value:</span>
-                    <span className={`ml-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{test.value}</span>
-                  </div>
-                  <div>
-                    <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Normal:</span>
-                    <span className={`ml-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{test.normal_range}</span>
-                  </div>
-                </div>
-                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {test.explanation}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Questions for Doctor */}
-      {insights.questions_for_doctor && insights.questions_for_doctor.length > 0 && (
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <div className="flex items-center space-x-3 mb-4">
-            <MessageCircle className="w-6 h-6 text-teal-600" />
-            <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Questions for Your Doctor
-            </h3>
-          </div>
-          <ul className="space-y-3">
-            {insights.questions_for_doctor.map((question, idx) => (
-              <li key={idx} className={`flex items-start space-x-3 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
-                  darkMode ? 'bg-teal-900/50 text-teal-400' : 'bg-teal-100 text-teal-700'
-                }`}>
-                  {idx + 1}
-                </span>
-                <p className={`text-sm flex-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {question}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Health Recommendations */}
-      {insights.health_recommendations && insights.health_recommendations.length > 0 && (
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <div className="flex items-center space-x-3 mb-4">
-            <Lightbulb className="w-6 h-6 text-yellow-600" />
-            <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Health Recommendations
-            </h3>
-          </div>
-          <div className="space-y-3">
-            {insights.health_recommendations.map((rec, idx) => (
-              <div key={idx} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                <div className="flex items-start space-x-3">
-                  {getPriorityIcon(rec.priority)}
-                  <div className="flex-1">
-                    <h4 className={`font-semibold mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {rec.category}
-                    </h4>
-                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      {rec.recommendation}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Family Screening Suggestions */}
-      {insights.family_screening_suggestions && insights.family_screening_suggestions.length > 0 && (
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <div className="flex items-center space-x-3 mb-4">
-            <Users className="w-6 h-6 text-pink-600" />
-            <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Family Screening Suggestions
-            </h3>
-          </div>
-          <div className="space-y-4">
-            {insights.family_screening_suggestions.map((suggestion, idx) => (
-              <div key={idx} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
-                <h4 className={`font-semibold mb-2 ${darkMode ? 'text-pink-400' : 'text-pink-600'}`}>
-                  {suggestion.condition}
-                </h4>
-                <p className={`text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="font-medium">Why:</span> {suggestion.reason}
-                </p>
-                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="font-medium">Who should screen:</span> {suggestion.who_should_screen}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Follow-up Timeline */}
-      {insights.follow_up_timeline && (
-        <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <div className="flex items-center space-x-3 mb-4">
-            <Calendar className="w-6 h-6 text-indigo-600" />
-            <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Follow-up Timeline
-            </h3>
-          </div>
-          <p className={`text-base ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            {insights.follow_up_timeline}
+          <p className={`text-base leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            {insights.summary}
           </p>
         </div>
-      )}
 
-      {/* Disclaimer */}
-      <div className={`p-4 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'}`}>
-        <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-800'}`}>
-          <strong>Disclaimer:</strong> These insights are for informational purposes only and do not constitute medical advice.
-          Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.
-        </p>
+        {/* Key Findings */}
+        {insights.key_findings && insights.key_findings.length > 0 && (
+          <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <Activity className="w-6 h-6 text-blue-600" />
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Key Findings
+              </h3>
+            </div>
+            <div className="space-y-4">
+              {insights.key_findings.map((finding, idx) => (
+                <div key={idx} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                  <h4 className={`font-semibold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                    {finding.category}
+                  </h4>
+                  <p className={`text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <span className="font-medium">Finding:</span> {finding.finding}
+                  </p>
+                  <p className={`text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <span className="font-medium">Significance:</span> {finding.significance}
+                  </p>
+                  <p className={`text-sm ${darkMode ? 'text-green-400' : 'text-green-700'}`}>
+                    <span className="font-medium">Action:</span> {finding.action_needed}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Abnormal Values */}
+        {insights.abnormal_values && insights.abnormal_values.length > 0 && (
+          <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <TrendingUp className="w-6 h-6 text-orange-600" />
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Values Outside Normal Range
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {insights.abnormal_values.map((test, idx) => (
+                <div key={idx} className={`p-4 rounded-lg border-l-4 ${test.status === 'CRITICAL' ? 'border-red-600 bg-red-50 dark:bg-red-900/20' :
+                    test.status === 'HIGH' ? 'border-orange-600 bg-orange-50 dark:bg-orange-900/20' :
+                      'border-yellow-600 bg-yellow-50 dark:bg-yellow-900/20'
+                  }`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {test.test_name}
+                    </h4>
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${test.status === 'CRITICAL' ? 'bg-red-600 text-white' :
+                        test.status === 'HIGH' ? 'bg-orange-600 text-white' :
+                          'bg-yellow-600 text-white'
+                      }`}>
+                      {test.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2 text-sm">
+                    <div>
+                      <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Your Value:</span>
+                      <span className={`ml-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{test.value}</span>
+                    </div>
+                    <div>
+                      <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Normal:</span>
+                      <span className={`ml-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{test.normal_range}</span>
+                    </div>
+                  </div>
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {test.explanation}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Questions for Doctor */}
+        {insights.questions_for_doctor && insights.questions_for_doctor.length > 0 && (
+          <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <MessageCircle className="w-6 h-6 text-teal-600" />
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Questions for Your Doctor
+              </h3>
+            </div>
+            <ul className="space-y-3">
+              {insights.questions_for_doctor.map((question, idx) => (
+                <li key={idx} className={`flex items-start space-x-3 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                  <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${darkMode ? 'bg-teal-900/50 text-teal-400' : 'bg-teal-100 text-teal-700'
+                    }`}>
+                    {idx + 1}
+                  </span>
+                  <p className={`text-sm flex-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {question}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Health Recommendations */}
+        {insights.health_recommendations && insights.health_recommendations.length > 0 && (
+          <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <Lightbulb className="w-6 h-6 text-yellow-600" />
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Health Recommendations
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {insights.health_recommendations.map((rec, idx) => (
+                <div key={idx} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                  <div className="flex items-start space-x-3">
+                    {getPriorityIcon(rec.priority)}
+                    <div className="flex-1">
+                      <h4 className={`font-semibold mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {rec.category}
+                      </h4>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        {rec.recommendation}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Family Screening Suggestions */}
+        {insights.family_screening_suggestions && insights.family_screening_suggestions.length > 0 && (
+          <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <Users className="w-6 h-6 text-pink-600" />
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Family Screening Suggestions
+              </h3>
+            </div>
+            <div className="space-y-4">
+              {insights.family_screening_suggestions.map((suggestion, idx) => (
+                <div key={idx} className={`p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'}`}>
+                  <h4 className={`font-semibold mb-2 ${darkMode ? 'text-pink-400' : 'text-pink-600'}`}>
+                    {suggestion.condition}
+                  </h4>
+                  <p className={`text-sm mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <span className="font-medium">Why:</span> {suggestion.reason}
+                  </p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <span className="font-medium">Who should screen:</span> {suggestion.who_should_screen}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Follow-up Timeline */}
+        {insights.follow_up_timeline && (
+          <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <Calendar className="w-6 h-6 text-indigo-600" />
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Follow-up Timeline
+              </h3>
+            </div>
+            <p className={`text-base ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              {insights.follow_up_timeline}
+            </p>
+          </div>
+        )}
+
+        {/* Disclaimer */}
+        <div className={`p-4 rounded-lg ${darkMode ? 'bg-yellow-900/20 border border-yellow-800' : 'bg-yellow-50 border border-yellow-200'}`}>
+          <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-800'}`}>
+            <strong>Disclaimer:</strong> These insights are for informational purposes only and do not constitute medical advice.
+            Always consult with your healthcare provider for medical decisions and before making any changes to your health routine.
+          </p>
+        </div>
       </div>
 
       {/* Action Buttons - Floating Bar */}
@@ -797,9 +764,8 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
         <div className="flex items-center justify-between">
           <button
             onClick={onBack}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-              darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-            }`}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+              }`}
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back</span>
@@ -808,9 +774,8 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
           <div className="flex items-center space-x-3">
             <button
               onClick={handleRegenerate}
-              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-                darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-              }`}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                }`}
             >
               <RefreshCw className="w-5 h-5" />
               <span>Regenerate</span>
@@ -819,13 +784,12 @@ export const UnifiedHealthInsights: React.FC<UnifiedHealthInsightsProps> = ({
             <button
               onClick={handleGenerateReport}
               disabled={generatingReport}
-              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-                generatingReport
+              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${generatingReport
                   ? 'bg-gray-400 cursor-not-allowed'
                   : reportCached
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
-              }`}
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
+                }`}
             >
               {generatingReport ? (
                 <>
